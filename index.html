@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#020308" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Super Moon" />
+  <meta name="description" content="Hi-res 3D Moon with live phase shading for your location." />
+  <title>Super Moon</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" type="image/png" href="apple-touch-icon.png" />
+  <link rel="apple-touch-icon" href="apple-touch-icon.png" />
+  <link rel="preload" href="moon-2k.jpg" as="image" type="image/jpeg" />
+  <link rel="preconnect" href="https://unpkg.com" crossorigin />
+  <link rel="modulepreload" href="https://unpkg.com/three@0.160.0/build/three.module.js" />
+  <style>
+    :root {
+      color-scheme: dark;
+      --text: #e8edf7;
+      --muted: #8b95a8;
+      --panel: rgba(8, 12, 20, 0.72);
+      --line: rgba(255, 255, 255, 0.1);
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #020308;
+      color: var(--text);
+      font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+      -webkit-text-size-adjust: 100%;
+      touch-action: none;
+    }
+
+    #stage {
+      position: fixed;
+      inset: 0;
+      padding:
+        max(0.5rem, env(safe-area-inset-top))
+        max(0.5rem, env(safe-area-inset-right))
+        max(0.5rem, env(safe-area-inset-bottom))
+        max(0.5rem, env(safe-area-inset-left));
+    }
+
+    #moon-host {
+      position: absolute;
+      top: max(0.35rem, env(safe-area-inset-top));
+      left: max(0.35rem, env(safe-area-inset-left));
+      right: max(0.35rem, env(safe-area-inset-right));
+      /* Keep globe above the control card so home fit never sits under UI */
+      bottom: calc(6.75rem + env(safe-area-inset-bottom, 0px));
+      overflow: hidden;
+    }
+
+    #moon-canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      touch-action: none;
+      cursor: grab;
+      opacity: 0;
+      transition: opacity 0.45s ease;
+    }
+
+    #moon-canvas.is-ready { opacity: 1; }
+    #moon-canvas:active { cursor: grabbing; }
+
+    .chrome {
+      position: fixed;
+      z-index: 2;
+      left: 0;
+      right: 0;
+      top: 0;
+      padding:
+        max(0.55rem, env(safe-area-inset-top))
+        max(1rem, env(safe-area-inset-right))
+        0
+        max(1rem, env(safe-area-inset-left));
+      pointer-events: none;
+      text-align: center;
+    }
+
+    .phase-line {
+      margin: 0;
+      font-size: 0.88rem;
+      color: var(--text);
+      text-shadow: 0 1px 10px rgba(0, 0, 0, 0.65);
+    }
+
+    /* Compact temp chrome — full card redesign later */
+    .loc-bar {
+      position: fixed;
+      z-index: 3;
+      left: 50%;
+      bottom: 0;
+      transform: translateX(-50%);
+      width: min(400px, calc(100% - 1rem));
+      margin-bottom: max(0.4rem, env(safe-area-inset-bottom));
+      padding: 0.35rem 0.5rem 0.4rem;
+      border-radius: 12px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      pointer-events: auto;
+      touch-action: auto;
+      display: grid;
+      gap: 0.28rem;
+    }
+
+    .loc-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr auto auto;
+      gap: 0.28rem;
+      align-items: center;
+    }
+
+    .loc-bar label {
+      display: grid;
+      gap: 0;
+      font-size: 0;
+      color: transparent;
+    }
+
+    .loc-bar label::before {
+      content: attr(data-short);
+      font-size: 0.58rem;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--muted);
+      line-height: 1.1;
+      margin-bottom: 0.1rem;
+    }
+
+    .loc-bar input {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: rgba(0, 0, 0, 0.35);
+      color: var(--text);
+      font: inherit;
+      font-size: 0.75rem;
+      padding: 0.28rem 0.35rem;
+      min-width: 0;
+    }
+
+    .loc-bar button {
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.06);
+      color: var(--text);
+      font: inherit;
+      font-size: 0.7rem;
+      padding: 0.3rem 0.4rem;
+      cursor: pointer;
+      white-space: nowrap;
+      align-self: end;
+    }
+
+    .loc-bar button:hover {
+      background: rgba(255, 255, 255, 0.1);
+    }
+
+    .loc-meta {
+      font-size: 0.62rem;
+      color: var(--muted);
+      text-align: center;
+      line-height: 1.2;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .hemi-row {
+      display: flex;
+      justify-content: center;
+      gap: 0.3rem;
+    }
+
+    .hemi-row button {
+      align-self: center;
+      min-width: 2.4rem;
+      padding: 0.2rem 0.45rem;
+      font-size: 0.65rem;
+    }
+
+    .hemi-row button.active {
+      background: rgba(255, 255, 255, 0.14);
+      border-color: rgba(255, 255, 255, 0.28);
+    }
+
+    .phase-panel {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 0.35rem 0.4rem;
+      align-items: center;
+      padding-bottom: 0.28rem;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .phase-panel-top {
+      display: none;
+    }
+
+    .phase-panel .live-btn {
+      grid-column: 2;
+      grid-row: 1;
+      padding: 0.22rem 0.5rem;
+      font-size: 0.68rem;
+      border-radius: 999px;
+      align-self: center;
+    }
+
+    .phase-panel .live-btn.is-preview {
+      background: rgba(255, 255, 255, 0.12);
+      border-color: rgba(255, 255, 255, 0.22);
+    }
+
+    #phase-slider {
+      grid-column: 1;
+      grid-row: 1;
+      width: 100%;
+      min-height: 28px;
+      height: 28px;
+      margin: 0;
+      cursor: pointer;
+      accent-color: #c8d4e8;
+      touch-action: pan-y;
+    }
+
+    .phase-slider-label {
+      grid-column: 1 / -1;
+      font-size: 0.6rem;
+      color: var(--muted);
+      text-align: center;
+      line-height: 1.1;
+      min-height: 0;
+    }
+
+    .status {
+      position: fixed;
+      z-index: 2;
+      left: 0;
+      right: 0;
+      bottom: calc(5.25rem + env(safe-area-inset-bottom));
+      text-align: center;
+      pointer-events: none;
+      font-size: 0.65rem;
+      color: var(--muted);
+      opacity: 0.65;
+      text-shadow: 0 1px 8px rgba(0, 0, 0, 0.65);
+    }
+  </style>
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+    }
+  }
+  </script>
+</head>
+<body>
+  <div id="stage">
+    <div id="moon-host">
+      <canvas
+        id="moon-canvas"
+        aria-label="3D Moon with live phase shading. Drag to rotate, scroll or pinch to zoom, double-tap to reset."
+      ></canvas>
+    </div>
+  </div>
+
+  <header class="chrome">
+    <p class="phase-line" id="phase-line">—</p>
+  </header>
+
+  <p class="status" id="status" data-state="loading">Loading surface…</p>
+
+  <div class="loc-bar" id="loc-bar">
+    <div class="phase-panel">
+      <div class="phase-panel-top">
+        <span>Lunar cycle</span>
+      </div>
+      <input
+        type="range"
+        id="phase-slider"
+        min="0"
+        max="1000"
+        value="0"
+        step="1"
+        aria-label="Scrub through one full lunar cycle"
+      />
+      <button type="button" class="live-btn is-live" id="live-btn" title="Reset to live moon for your location">Live</button>
+      <div class="phase-slider-label" id="slider-label">Live</div>
+    </div>
+    <div class="loc-row">
+      <label data-short="Lat">
+        Lat
+        <input id="lat-input" type="number" inputmode="decimal" step="0.0001" min="-90" max="90" value="0" aria-label="Latitude" />
+      </label>
+      <label data-short="Lon">
+        Lon
+        <input id="lon-input" type="number" inputmode="decimal" step="0.0001" min="-180" max="180" value="0" aria-label="Longitude" />
+      </label>
+      <button type="button" id="apply-loc" title="Apply coordinates">Go</button>
+      <button type="button" id="geo-btn" title="Use device location">GPS</button>
+    </div>
+    <div class="hemi-row">
+      <button type="button" id="hemi-n" class="active" title="Northern hemisphere test">N</button>
+      <button type="button" id="hemi-s" title="Southern hemisphere test">S</button>
+    </div>
+    <div class="loc-meta" id="loc-meta">Location…</div>
+  </div>
+
+  <script src="astronomy.js"></script>
+  <script type="module">
+    import { createMoonGlobe } from "./moon.js";
+
+    const STORAGE_KEY = "moon-globe-loc-v1";
+    const SYNODIC = 29.530588853;
+    const canvas = document.getElementById("moon-canvas");
+    const status = document.getElementById("status");
+    const phaseLine = document.getElementById("phase-line");
+    const latInput = document.getElementById("lat-input");
+    const lonInput = document.getElementById("lon-input");
+    const locMeta = document.getElementById("loc-meta");
+    const geoBtn = document.getElementById("geo-btn");
+    const applyBtn = document.getElementById("apply-loc");
+    const phaseSlider = document.getElementById("phase-slider");
+    const sliderLabel = document.getElementById("slider-label");
+    const liveBtn = document.getElementById("live-btn");
+    const hemiN = document.getElementById("hemi-n");
+    const hemiS = document.getElementById("hemi-s");
+
+    let previewMode = false;
+    let sliderAnchorDate = null;
+    let sliderAnchorPhase = 0;
+    let previewRaf = 0;
+
+    function fmtCoord(n, pos, neg) {
+      const a = Math.abs(n);
+      const hemi = n >= 0 ? pos : neg;
+      return `${a.toFixed(2)}°${hemi}`;
+    }
+
+    function saveLoc(lat, lon, source) {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({ lat, lon, source }));
+      } catch (_) {}
+    }
+
+    function loadSavedLoc() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) return null;
+        const o = JSON.parse(raw);
+        if (!Number.isFinite(o.lat) || !Number.isFinite(o.lon)) return null;
+        return o;
+      } catch (_) {
+        return null;
+      }
+    }
+
+    function livePhase01(date = new Date()) {
+      const A = globalThis.Astronomy;
+      if (!A) return 0;
+      return (((A.MoonPhase(date) % 360) + 360) % 360) / 360;
+    }
+
+    function phaseDelta(from, to) {
+      let d = to - from;
+      if (d > 0.5) d -= 1;
+      if (d < -0.5) d += 1;
+      return d;
+    }
+
+    function dateFromPhaseOffset(anchorDate, anchorPhase, targetPhase) {
+      const delta = phaseDelta(anchorPhase, targetPhase);
+      return new Date(anchorDate.getTime() + delta * SYNODIC * 86400000);
+    }
+
+    function showPhase(info) {
+      if (!info) return;
+      const pct = (info.fraction * 100).toFixed(0);
+      const day = (info.phase01 * SYNODIC).toFixed(1);
+      phaseLine.textContent = `${info.name} · ${pct}% lit`;
+      if (previewMode) {
+        sliderLabel.textContent = `Day ${day}/${SYNODIC.toFixed(1)}`;
+      }
+    }
+
+    function showLoc(lat, lon, source) {
+      latInput.value = Number(lat).toFixed(4);
+      lonInput.value = Number(lon).toFixed(4);
+      const where = `${fmtCoord(lat, "N", "S")} ${fmtCoord(lon, "E", "W")}`;
+      const tag = source === "gps" ? "GPS" : source === "saved" ? "Saved" : source === "manual" ? "Manual" : source === "hemi" ? "Hemi test" : "Default";
+      locMeta.textContent = `${tag} · ${where}`;
+      const south = Number(lat) < 0;
+      hemiN.classList.toggle("active", !south);
+      hemiS.classList.toggle("active", south);
+    }
+
+    /** Flip lat sign, keep |lat| and lon — quick N/S compare. */
+    function setHemisphere(southern) {
+      const latAbs = Math.abs(Number(latInput.value) || 35);
+      const lon = Number(lonInput.value) || 0;
+      const lat = southern ? -latAbs : latAbs;
+      applyLocation(lat, lon, "hemi");
+      if (!previewMode) goLive();
+    }
+
+    function setLiveUI() {
+      liveBtn.classList.toggle("is-preview", previewMode);
+      liveBtn.classList.toggle("is-live", !previewMode);
+      liveBtn.textContent = previewMode ? "Use live" : "Live";
+      if (!previewMode) sliderLabel.textContent = "Live · your sky";
+    }
+
+    function goLive() {
+      previewMode = false;
+      sliderAnchorDate = null;
+      const now = new Date();
+      const p = livePhase01(now);
+      phaseSlider.value = String(Math.round(p * 1000));
+      // Live moon for this location: ephemeris pose + default camera (near side from Earth)
+      globe.setTime(now, { lockOrient: false });
+      globe.resetView();
+      showPhase(globe.getPhaseInfo());
+      setLiveUI();
+    }
+
+    function ensureSliderAnchor() {
+      if (sliderAnchorDate) return;
+      const now = new Date();
+      sliderAnchorDate = previewMode
+        ? (globe.getPhaseInfo()?.when || now)
+        : now;
+      sliderAnchorPhase = previewMode
+        ? Number(phaseSlider.value) / 1000
+        : livePhase01(sliderAnchorDate);
+    }
+
+    const globe = createMoonGlobe(canvas, {
+      onReady() {
+        canvas.classList.add("is-ready");
+        status.textContent = "Surface 2K · sharpening…";
+      },
+      onQuality(level) {
+        status.textContent = level === "8k" ? "Surface 8K" : `Surface ${level.toUpperCase()}`;
+        if (level === "8k") {
+          setTimeout(() => {
+            status.style.opacity = "0.4";
+          }, 1600);
+        }
+      },
+      onPhase: showPhase,
+    });
+
+    function applyLocation(lat, lon, source) {
+      globe.setObserver(lat, lon);
+      if (!previewMode) {
+        globe.setTime(new Date(), { lockOrient: false });
+      } else {
+        const phase = Number(phaseSlider.value) / 1000;
+        ensureSliderAnchor();
+        // Keep scrub calm; setObserver already refreshed frozen pose for new place
+        globe.setTime(
+          dateFromPhaseOffset(sliderAnchorDate, sliderAnchorPhase, phase),
+          { lockOrient: true, orientDate: new Date() }
+        );
+      }
+      showLoc(lat, lon, source);
+      showPhase(globe.getPhaseInfo());
+      saveLoc(lat, lon, source);
+    }
+
+    phaseSlider.addEventListener("pointerdown", ensureSliderAnchor);
+    phaseSlider.addEventListener("pointerup", () => {
+      sliderAnchorDate = null;
+    });
+    phaseSlider.addEventListener("pointercancel", () => {
+      sliderAnchorDate = null;
+    });
+
+    phaseSlider.addEventListener("input", () => {
+      ensureSliderAnchor();
+      previewMode = true;
+      setLiveUI();
+      const phase = Number(phaseSlider.value) / 1000;
+      const date = dateFromPhaseOffset(sliderAnchorDate, sliderAnchorPhase, phase);
+      if (previewRaf) cancelAnimationFrame(previewRaf);
+      previewRaf = requestAnimationFrame(() => {
+        previewRaf = 0;
+        // Freeze sky pose on first scrub tick; only terminator walks the cycle
+        globe.setTime(date, { lockOrient: true, orientDate: new Date() });
+        showPhase(globe.getPhaseInfo());
+      });
+    });
+
+    liveBtn.addEventListener("click", goLive);
+    hemiN.addEventListener("click", () => setHemisphere(false));
+    hemiS.addEventListener("click", () => setHemisphere(true));
+
+    applyBtn.addEventListener("click", () => {
+      const lat = Number(latInput.value);
+      const lon = Number(lonInput.value);
+      if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+        locMeta.textContent = "Enter valid lat / lon";
+        return;
+      }
+      applyLocation(lat, lon, "manual");
+    });
+
+    geoBtn.addEventListener("click", () => {
+      if (!navigator.geolocation) {
+        locMeta.textContent = "Geolocation not available";
+        return;
+      }
+      locMeta.textContent = "Locating…";
+      geoBtn.disabled = true;
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          geoBtn.disabled = false;
+          applyLocation(pos.coords.latitude, pos.coords.longitude, "gps");
+        },
+        (err) => {
+          geoBtn.disabled = false;
+          locMeta.textContent = err.code === 1 ? "Location permission denied" : "Location failed";
+        },
+        { enableHighAccuracy: false, timeout: 12000, maximumAge: 300000 }
+      );
+    });
+
+    // Boot location: saved → GPS attempt → equator default
+    const saved = loadSavedLoc();
+    if (saved) {
+      applyLocation(saved.lat, saved.lon, "saved");
+    } else {
+      applyLocation(0, 0, "default");
+    }
+    goLive();
+
+    // Auto-locate once if nothing saved
+    if (!saved && navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => applyLocation(pos.coords.latitude, pos.coords.longitude, "gps"),
+        () => {},
+        { enableHighAccuracy: false, timeout: 8000, maximumAge: 600000 }
+      );
+    }
+
+    // Keep phase live (only when not scrubbing)
+    setInterval(() => {
+      if (previewMode) return;
+      globe.setTime(new Date(), { lockOrient: false });
+      const p = livePhase01();
+      phaseSlider.value = String(Math.round(p * 1000));
+      showPhase(globe.getPhaseInfo());
+    }, 60000);
+
+    function onResize() {
+      globe.fitToHost();
+    }
+    window.addEventListener("resize", onResize);
+    window.addEventListener("orientationchange", () => {
+      setTimeout(onResize, 150);
+      setTimeout(onResize, 400);
+    });
+    window.visualViewport?.addEventListener("resize", onResize);
+    requestAnimationFrame(() => {
+      onResize();
+      requestAnimationFrame(onResize);
+    });
+  </script>
+</body>
+</html>
