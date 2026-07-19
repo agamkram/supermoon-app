@@ -537,10 +537,10 @@
 
   <script src="astronomy.js"></script>
   <script type="module">
-    import { createMoonGlobe } from "./moon.js?v=74";
+    import { createMoonGlobe } from "./moon.js?v=75";
 
     const STORAGE_KEY = "moon-globe-loc-v1";
-    const TIDE_STATIONS_KEY = "supermoon-noaa-tide-stations-v2";
+    const TIDE_STATIONS_KEY = "supermoon-noaa-tide-stations-v3";
     const SYNODIC = 29.530588853;
     const MOON_RADIUS_KM = 1737.4;
     const MI_PER_KM = 0.621371;
@@ -668,6 +668,7 @@
             lat: Number(s.lat),
             lng: Number(s.lng),
             name: String(s.name || s.id),
+            state: s.state ? String(s.state).trim() : "",
           }));
         try {
           localStorage.setItem(
@@ -753,6 +754,20 @@
       return { nextH, nextL };
     }
 
+    /** e.g. "Rhems, Black Mingo Creek, SC" */
+    function formatTideStationLabel(st) {
+      if (!st) return "—";
+      const name = (st.name || st.id || "").trim();
+      const state = (st.state || "").trim().toUpperCase();
+      if (name && state) {
+        // Avoid "Foo, SC, SC" if name already ends with state
+        const re = new RegExp(`,\\s*${state}$`, "i");
+        if (re.test(name)) return name;
+        return `${name}, ${state}`;
+      }
+      return name || st.id || "—";
+    }
+
     /** Nearest NOAA tide-prediction station → full station name + next high/low. */
     async function updateTides(lat, lon, when) {
       const seq = ++tideSeq;
@@ -775,9 +790,10 @@
           el.ltide.textContent = "—";
           return;
         }
-        const fullName = near.station.name || near.station.id;
-        el.station.textContent = fullName;
-        el.station.title = `${fullName} · ${Math.round(near.km)} km`;
+        const st = near.station;
+        const place = formatTideStationLabel(st);
+        el.station.textContent = place;
+        el.station.title = `${place} · ${Math.round(near.km)} km away`;
         const preds = await fetchHiloPredictions(near.station.id, when);
         if (seq !== tideSeq) return;
         const { nextH, nextL } = nextExtremes(preds, when);
@@ -956,7 +972,7 @@
       if (previewMode) {
         cycleDate.innerHTML = `${fmtDateTime(m.when)}<span class="live-tag">Preview</span>`;
       } else {
-        cycleDate.innerHTML = `${fmtDateTime(m.when)}<span class="live-tag">Live · v74</span>`;
+        cycleDate.innerHTML = `${fmtDateTime(m.when)}<span class="live-tag">Live · v75</span>`;
       }
 
       // Always nearest NOAA prediction station for observer lat/lon
