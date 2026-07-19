@@ -465,11 +465,22 @@ export function createMoonGlobe(canvas, options = {}) {
     key.target.position.copy(target);
   }
 
+  /** CSS Y so home moon sits in the upper safe band (above bottom info), not mid-screen. */
+  function homeScreenOffsetY() {
+    const pads = readHomePadsPx();
+    // Safe-band center is above the viewport center when bottom pad > top pad.
+    // CSS translateY: negative = content moves up.
+    return (pads.top - pads.bottom) / 2;
+  }
+
   function applyHomeFraming() {
     target.set(0, 0, 0);
     camera.up.set(0, 1, 0);
     camera.position.set(0, 0, homeDist);
     clearScreenPan();
+    // Phone home: lift into top band (only change on open / Live / full un-zoom)
+    screenPanY = homeScreenOffsetY();
+    applyCanvasPanTransform();
     readSpherical();
     writeCamera();
     syncMoon();
