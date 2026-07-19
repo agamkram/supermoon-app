@@ -409,33 +409,36 @@
      * App stays fully usable. Tap moon (or the badge) to toggle.
      */
     body.is-red-mode {
-      --text: #e07070;
-      --muted: #a04040;
-      --dim: #803030;
-      --faint: #5a2020;
-      --cell: #140606;
-      --line: #4a1818;
-      --moon: #ff8a8a;
-      --panel: rgba(20, 4, 4, 0.88);
-      background: #050000;
+      --text: #9a2020;
+      --muted: #6a1414;
+      --dim: #551010;
+      --faint: #3a0a0a;
+      --cell: #0a0000;
+      --line: #3a0c0c;
+      --moon: #b02828;
+      --panel: rgba(8, 0, 0, 0.92);
+      --red-track: #2a0808;
+      --red-thumb: #6a1010;
+      background: #020000;
       color: var(--text);
+      color-scheme: dark;
     }
 
     body.is-red-mode #moon-host,
     body.is-red-mode #stage {
-      background: #050000;
+      background: #020000;
     }
 
-    /* Soft red cast on the globe so it isn’t grey-white bright */
+    /* Deeper red cast on the globe */
     body.is-red-mode #moon-host {
-      filter: sepia(1) hue-rotate(-52deg) saturate(3.2) brightness(0.62);
+      filter: sepia(1) hue-rotate(-54deg) saturate(4.5) brightness(0.42);
     }
 
     body.is-red-mode .loc-bar {
       background: linear-gradient(
         to top,
-        rgba(5, 0, 0, 0.97) 70%,
-        rgba(5, 0, 0, 0.55) 100%
+        rgba(2, 0, 0, 0.98) 70%,
+        rgba(2, 0, 0, 0.6) 100%
       );
     }
 
@@ -444,25 +447,68 @@
     body.is-red-mode .hemi button,
     body.is-red-mode .edit-panel button,
     body.is-red-mode .edit-panel input {
-      background: rgba(80, 10, 10, 0.35);
-      border-color: #5a2020;
+      background: rgba(40, 4, 4, 0.55);
+      border-color: #3a0c0c;
       color: var(--text);
-      accent-color: #c04040;
+      accent-color: #6a1010;
     }
 
     body.is-red-mode .hemi button.active,
     body.is-red-mode .live-btn.is-preview {
-      background: rgba(120, 20, 20, 0.45);
-      border-color: #803030;
+      background: rgba(70, 10, 10, 0.55);
+      border-color: #551010;
     }
 
     body.is-red-mode #phase-slider {
-      accent-color: #c04040;
+      -webkit-appearance: none;
+      appearance: none;
+      accent-color: #6a1010;
+      background: transparent;
+      color: #6a1010;
+    }
+
+    /* WebKit / Blink range thumb stays white unless styled explicitly */
+    body.is-red-mode #phase-slider::-webkit-slider-runnable-track {
+      height: 4px;
+      border-radius: 2px;
+      background: var(--red-track);
+    }
+
+    body.is-red-mode #phase-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 16px;
+      height: 16px;
+      margin-top: -6px;
+      border-radius: 50%;
+      border: 1px solid #4a0c0c;
+      background: var(--red-thumb);
+      box-shadow: none;
+    }
+
+    body.is-red-mode #phase-slider::-moz-range-track {
+      height: 4px;
+      border-radius: 2px;
+      background: var(--red-track);
+      border: none;
+    }
+
+    body.is-red-mode #phase-slider::-moz-range-thumb {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      border: 1px solid #4a0c0c;
+      background: var(--red-thumb);
+      box-shadow: none;
     }
 
     body.is-red-mode .app-title {
-      color: #e07070;
-      text-shadow: 0 1px 12px rgba(80, 0, 0, 0.6);
+      color: #8a1818;
+      text-shadow: 0 1px 10px rgba(40, 0, 0, 0.7);
+    }
+
+    body.is-red-mode .m-cell .v.moon {
+      color: #a02020;
     }
 
     .red-badge {
@@ -470,10 +516,10 @@
       z-index: 20;
       top: max(0.35rem, env(safe-area-inset-top));
       right: max(0.4rem, env(safe-area-inset-right));
-      border: 1px solid #5a2020;
+      border: 1px solid #3a0c0c;
       border-radius: 999px;
-      background: rgba(20, 4, 4, 0.85);
-      color: #c05050;
+      background: rgba(8, 0, 0, 0.9);
+      color: #7a1818;
       font-family: "DM Sans", system-ui, sans-serif;
       font-size: 8px;
       font-weight: 600;
@@ -633,7 +679,7 @@
 
   <script src="astronomy.js"></script>
   <script type="module">
-    import { createMoonGlobe } from "./moon.js?v=78";
+    import { createMoonGlobe } from "./moon.js?v=79";
 
     const STORAGE_KEY = "moon-globe-loc-v1";
     const TIDE_STATIONS_KEY = "supermoon-noaa-tide-stations-v4";
@@ -1074,7 +1120,7 @@
       if (previewMode) {
         cycleDate.innerHTML = `${fmtDateTime(m.when)}<span class="live-tag">Preview</span>`;
       } else {
-        cycleDate.innerHTML = `${fmtDateTime(m.when)}<span class="live-tag">Live · v78</span>`;
+        cycleDate.innerHTML = `${fmtDateTime(m.when)}<span class="live-tag">Live · v79</span>`;
       }
 
       // Always nearest NOAA prediction station for observer lat/lon
