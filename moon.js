@@ -593,23 +593,35 @@ export function createMoonGlobe(canvas, options = {}) {
     applyHomeFraming();
   }
 
-  // —— Touch (phone): 1 = orbit, 2fs = pan, pinch = zoom ——
+  // —— Phone gestures: window capture so 2fs is never lost to other layers ——
+  // 1 finger = orbit · 2fs (slide) = pan · pinch = zoom
 
-  function loadTouches(list) {
-    fingers.clear();
-    for (let i = 0; i < list.length; i++) {
-      const t = list[i];
-      fingers.set(t.identifier, { x: t.clientX, y: t.clientY });
-    }
+  function isFormControl(el) {
+    if (!el || !el.closest) return false;
+    return !!el.closest("input, button, select, textarea, a, label");
+  }
+
+  function midSpanFromTouches(touchList) {
+    if (!touchList || touchList.length < 2) return null;
+    const a = touchList[0];
+    const b = touchList[1];
+    return {
+      span: Math.max(
+        Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY),
+        1
+      ),
+      midX: (a.clientX + b.clientX) / 2,
+      midY: (a.clientY + b.clientY) / 2,
+    };
   }
 
   function onTouchStart(e) {
+    // Let slider / Live / inputs work
+    if (e.touches.length === 1 && isFormControl(e.target)) return;
+
     e.preventDefault();
-    e.stopPropagation();
-    loadTouches(e.touches);
     if (e.touches.length >= 2) {
-      const g = twoFingerGeom();
-      twoBase = g ? { span: g.span, midX: g.midX, midY: g.midY } : null;
+      twoBase = midSpanFromTouches(e.touches);
       orbitDrag = null;
     } else if (e.touches.length === 1) {
       twoBase = null;
@@ -619,42 +631,42 @@ export function createMoonGlobe(canvas, options = {}) {
   }
 
   function onTouchMove(e) {
-    e.preventDefault();
-    e.stopPropagation();
-    loadTouches(e.touches);
+    if (e.touches.length === 0) return;
+    // If single finger on a form control, ignore
+    if (e.touches.length === 1 && isFormControl(e.target) && !orbitDrag) return;
 
+    e.preventDefault();
+
+    // —— Two fingers: 2fs pan + pinch zoom ——
     if (e.touches.length >= 2) {
-      const g = twoFingerGeom();
-      if (!g) return;
+      const now = midSpanFromTouches(e.touches);
+      if (!now) return;
       if (!twoBase) {
-        twoBase = { span: g.span, midX: g.midX, midY: g.midY };
+        twoBase = now;
         return;
       }
 
-      const dMidX = g.midX - twoBase.midX;
-      const dMidY = g.midY - twoBase.midY;
-      const spanRatio = g.span / Math.max(twoBase.span, 1);
+      const dMidX = now.midX - twoBase.midX;
+      const dMidY = now.midY - twoBase.midY;
+      const spanRatio = now.span / Math.max(twoBase.span, 1);
       const spanChange = Math.abs(Math.log(Math.max(spanRatio, 1e-6)));
 
-      // 2fs = pan (always on midpoint motion)
-      if (Math.abs(dMidX) >= 0.5 || Math.abs(dMidY) >= 0.5) {
-        panCamera(dMidX, dMidY);
-      }
+      // 2fs — pan by midpoint (always)
+      panCamera(dMidX, dMidY);
 
-      // Pinch zoom (frame-to-frame) — works zoomed in or out
+      // Pinch — frame-to-frame zoom
       if (spanChange > PINCH_EPS) {
         setCamDist(
           camDist() / Math.pow(Math.max(spanRatio, 0.05), PINCH_POWER)
         );
       }
 
-      twoBase.span = g.span;
-      twoBase.midX = g.midX;
-      twoBase.midY = g.midY;
+      twoBase = now;
       return;
     }
 
-    if (e.touches.length === 1 && orbitDrag) {
+    // —— One finger: orbit ——
+    if (orbitDrag && e.touches.length === 1) {
       const t = e.touches[0];
       const dx = t.clientX - orbitDrag.x;
       const dy = t.clientY - orbitDrag.y;
@@ -670,10 +682,8 @@ export function createMoonGlobe(canvas, options = {}) {
   }
 
   function onTouchEnd(e) {
-    loadTouches(e.touches);
     if (e.touches.length >= 2) {
-      const g = twoFingerGeom();
-      twoBase = g ? { span: g.span, midX: g.midX, midY: g.midY } : null;
+      twoBase = midSpanFromTouches(e.touches);
       orbitDrag = null;
     } else if (e.touches.length === 1) {
       twoBase = null;
@@ -690,6 +700,7 @@ export function createMoonGlobe(canvas, options = {}) {
   let mouseLast = null;
 
   function onMouseDown(e) {
+    if (isFormControl(e.target)) return;
     if (e.button === 0 && e.shiftKey) mouseMode = "pan";
     else if (e.button === 0) mouseMode = "orbit";
     else if (e.button === 2) {
@@ -727,6 +738,7 @@ export function createMoonGlobe(canvas, options = {}) {
   }
 
   function onWheel(e) {
+    if (isFormControl(e.target)) return;
     e.preventDefault();
     setCamDist(camDist() * Math.exp(e.deltaY * WHEEL_DOLLY));
   }
@@ -735,14 +747,17 @@ export function createMoonGlobe(canvas, options = {}) {
     e.preventDefault();
   }
 
-  const tOpts = { passive: false };
-  surface.addEventListener("touchstart", onTouchStart, tOpts);
-  surface.addEventListener("touchmove", onTouchMove, tOpts);
-  surface.addEventListener("touchend", onTouchEnd);
-  surface.addEventListener("touchcancel", onTouchEnd);
+  // Capture on window = 2nd finger always seen on iOS, regardless of hit target
+  const touchOpts = { passive: false, capture: true };
+  window.addEventListener("touchstart", onTouchStart, touchOpts);
+  window.addEventListener("touchmove", onTouchMove, touchOpts);
+  window.addEventListener("touchend", onTouchEnd, { capture: true });
+  window.addEventListener("touchcancel", onTouchEnd, { capture: true });
   surface.addEventListener("mousedown", onMouseDown);
-  surface.addEventListener("wheel", onWheel, tOpts);
+  surface.addEventListener("wheel", onWheel, { passive: false });
   surface.addEventListener("contextmenu", onContextMenu);
+  document.documentElement.style.touchAction = "none";
+  document.body.style.touchAction = "none";
   surface.style.touchAction = "none";
   canvas.style.touchAction = "none";
 
@@ -773,10 +788,10 @@ export function createMoonGlobe(canvas, options = {}) {
       cancelAnimationFrame(animId);
       window.removeEventListener("mousemove", onMouseMove);
       window.removeEventListener("mouseup", onMouseUp);
-      surface.removeEventListener("touchstart", onTouchStart);
-      surface.removeEventListener("touchmove", onTouchMove);
-      surface.removeEventListener("touchend", onTouchEnd);
-      surface.removeEventListener("touchcancel", onTouchEnd);
+      window.removeEventListener("touchstart", onTouchStart, true);
+      window.removeEventListener("touchmove", onTouchMove, true);
+      window.removeEventListener("touchend", onTouchEnd, true);
+      window.removeEventListener("touchcancel", onTouchEnd, true);
       surface.removeEventListener("mousedown", onMouseDown);
       surface.removeEventListener("wheel", onWheel);
       surface.removeEventListener("contextmenu", onContextMenu);
