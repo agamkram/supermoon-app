@@ -443,6 +443,7 @@ export function createMoonGlobe(canvas, options = {}) {
     controls.update();
     moonGroup.position.set(0, 0, 0);
     key.target.position.set(0, 0, 0);
+    prevCamDist = homeDist;
     applyEphemeris();
   }
 
@@ -504,36 +505,39 @@ export function createMoonGlobe(canvas, options = {}) {
     applyHomeFraming();
   }
 
-  /** Keep mesh on orbit pivot so 2fs pan moves the moon, not empty space. */
+  /**
+   * Keep mesh on orbit pivot so 2fs pan moves the moon.
+   * IMPORTANT: do NOT snap home whenever target moves at max zoom — that
+   * cancelled every pan on the default view (looked like “no 2fs”).
+   * Home snap only when the user *zooms out* into max distance.
+   */
+  let prevCamDist = homeDist;
+
   function syncMoonToControls() {
     moonGroup.position.copy(controls.target);
     key.target.position.copy(controls.target);
 
-    // Soft pan bound
     if (controls.target.length() > MAX_PAN) {
       controls.target.setLength(MAX_PAN);
     }
 
-    // Full un-zoom → home (size + center)
     const dist = camDist();
-    if (
-      dist >= homeDist * 0.985 &&
-      (controls.target.lengthSq() > 1e-4 ||
-        Math.abs(camera.position.x) > 0.02 ||
-        Math.abs(camera.position.y) > 0.02 ||
-        Math.abs(dist - homeDist) > 0.03)
-    ) {
+    // Crossed into full zoom-out from a closer view → restore start place
+    if (prevCamDist < homeDist * 0.98 && dist >= homeDist * 0.99) {
       applyHomeFraming();
+      prevCamDist = homeDist;
+      return;
     }
+    prevCamDist = dist;
   }
 
-  // Calm phone pinch a bit
+  // Phone: clearer pan, calmer pinch
   const isTouch =
     typeof window !== "undefined" &&
     window.matchMedia("(pointer: coarse)").matches;
-  controls.zoomSpeed = isTouch ? 0.75 : 1.0;
+  controls.zoomSpeed = isTouch ? 0.7 : 0.95;
   controls.rotateSpeed = isTouch ? 0.65 : 0.5;
-  controls.panSpeed = isTouch ? 1.35 : 1.1;
+  controls.panSpeed = isTouch ? 1.6 : 1.2;
 
   surface.style.touchAction = "none";
   canvas.style.touchAction = "none";
