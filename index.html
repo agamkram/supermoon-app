@@ -343,8 +343,7 @@
       letter-spacing: 0.02em;
     }
 
-    .loc-card button,
-    .live-btn {
+    .loc-card button {
       border: 1px solid var(--line);
       border-radius: 6px;
       background: rgba(255, 255, 255, 0.05);
@@ -871,7 +870,7 @@
   <script src="astronomy.js"></script>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
   <script type="module">
-    import { createMoonGlobe } from "./moon.js?v=91";
+    import { createMoonGlobe } from "./moon.js?v=92";
 
     const STORAGE_KEY = "moon-globe-loc-v1";
     const TIDE_STATIONS_KEY = "supermoon-noaa-tide-stations-v5";
@@ -1391,6 +1390,11 @@
       const m = computeMetrics(info);
       if (!m) return;
 
+      // Live mode: keep slider thumb locked to current cycle phase (e.g. day 5.6 → ~19%)
+      if (!previewMode && Number.isFinite(m.phase01)) {
+        syncSliderToPhase01(m.phase01);
+      }
+
       el.phase.textContent = m.name;
       el.illum.textContent = Number.isFinite(m.frac)
         ? `${Math.round(m.frac * 100)}%`
@@ -1418,7 +1422,7 @@
       if (previewMode) {
         cycleDate.innerHTML = `${fmtDateTime(m.when)}<span class="live-tag">Preview</span>`;
       } else {
-        cycleDate.innerHTML = `${fmtDateTime(m.when)}<span class="live-tag">Live · v91</span>`;
+        cycleDate.innerHTML = `${fmtDateTime(m.when)}<span class="live-tag">Live · v92</span>`;
       }
 
       // Always nearest NOAA prediction station for observer lat/lon
@@ -1452,28 +1456,42 @@
     }
 
     function setLiveUI() {
+      if (!liveBtn) return;
       liveBtn.classList.toggle("is-preview", previewMode);
       liveBtn.classList.toggle("is-live", !previewMode);
       liveBtn.textContent = previewMode ? "Use live" : "Live";
     }
 
-    function goLive() {
-      previewMode = false;
-      sliderAnchorDate = null;
-      closeLocationDialog();
-      const now = new Date();
-      const p = livePhase01(now);
-      // Thumb at current place in the new→new cycle
-      phaseSlider.value = String(Math.round(p * 1000));
-      globe.setTime(now, { lockOrient: false });
-      globe.resetView();
-      showPhase(globe.getPhaseInfo());
-      setLiveUI();
+    /** Put slider thumb at phase 0…1 (new→new). Matches cycle-day metric. */
+    function syncSliderToPhase01(phase01) {
+      if (!phaseSlider) return;
+      const p = Number(phase01);
+      if (!Number.isFinite(p)) return;
+      const v = Math.round(Math.min(1, Math.max(0, p)) * 1000);
+      phaseSlider.value = String(v);
     }
 
-    /** First scrub freeze only — date itself comes from cycle phase */
-    function ensureSliderOrientLock() {
-      // no-op placeholder kept for call sites; lock applied in setTime opts
+    function goLive() {
+      previewMode = false;
+      try {
+        if (typeof closeLocationDialog === "function") closeLocationDialog();
+      } catch (_) {}
+      const now = new Date();
+      let info = null;
+      try {
+        info = globe.setTime(now, { lockOrient: false });
+        globe.resetView();
+      } catch (err) {
+        console.warn("goLive setTime/resetView", err);
+      }
+      // Prefer ephemeris phase (same source as “Cycle day”) so thumb matches
+      const p =
+        info && Number.isFinite(info.phase01)
+          ? info.phase01
+          : livePhase01(now);
+      syncSliderToPhase01(p);
+      showPhase(info || globe.getPhaseInfo());
+      setLiveUI();
     }
 
     let redModeOn = false;
@@ -1550,11 +1568,23 @@
       });
     });
 
-    liveBtn.addEventListener("click", (e) => {
-      e.preventDefault();
-      e.stopPropagation();
+    function onLiveActivate(e) {
+      if (e) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
       goLive();
-    });
+    }
+    // click + pointerup: iOS sometimes eats click after touch-action wars
+    liveBtn.addEventListener("click", onLiveActivate);
+    liveBtn.addEventListener(
+      "pointerup",
+      (e) => {
+        if (e.pointerType === "mouse" && e.button !== 0) return;
+        onLiveActivate(e);
+      },
+      { passive: false }
+    );
     hemiN.addEventListener("click", () => setHemisphere(false));
     hemiS.addEventListener("click", () => setHemisphere(true));
 
@@ -1661,11 +1691,17 @@
       applyLocation(0, 0, "default");
     }
     goLive();
+    // Second pass after layout: ensure thumb matches live phase once metrics paint
+    requestAnimationFrame(() => {
+      goLive();
+    });
 
     if (!saved && navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
-        (pos) =>
-          applyLocation(pos.coords.latitude, pos.coords.longitude, "gps"),
+        (pos) => {
+          applyLocation(pos.coords.latitude, pos.coords.longitude, "gps");
+          if (!previewMode) goLive();
+        },
         () => {},
         { enableHighAccuracy: false, timeout: 8000, maximumAge: 600000 }
       );
