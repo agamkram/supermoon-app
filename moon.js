@@ -426,13 +426,39 @@ export function createMoonGlobe(canvas, options = {}) {
     key.target.position.copy(target);
   }
 
+  /**
+   * Home size: fill the area above the bottom info reserve (light padding).
+   * Canvas is full-window so zoom can grow to the entire screen; only *home*
+   * distance is computed against the smaller “safe” band.
+   */
+  function readHomePadsPx() {
+    let top = 48;
+    let bottom = 248;
+    if (typeof document !== "undefined") {
+      const probe = document.createElement("div");
+      probe.style.cssText =
+        "position:absolute;visibility:hidden;pointer-events:none;width:0";
+      document.body.appendChild(probe);
+      probe.style.height = "calc(2rem + env(safe-area-inset-top, 0px))";
+      top = probe.offsetHeight || top;
+      probe.style.height = "calc(15.5rem + env(safe-area-inset-bottom, 0px))";
+      bottom = probe.offsetHeight || bottom;
+      probe.remove();
+    }
+    return { top, bottom };
+  }
+
   function computeHomeDistance(w, h) {
-    const aspect = Math.max(w, 1) / Math.max(h, 1);
+    const pads = readHomePadsPx();
+    const availH = Math.max(160, h - pads.top - pads.bottom);
+    const availW = Math.max(160, w - 24);
     const vFov = THREE.MathUtils.degToRad(camera.fov);
+    const aspect = Math.max(w, 1) / Math.max(h, 1);
     const hFov = 2 * Math.atan(Math.tan(vFov / 2) * aspect);
     const fit = HOME_FILL;
-    const distV = RADIUS / (fit * Math.tan(vFov / 2));
-    const distH = RADIUS / (fit * Math.tan(hFov / 2));
+    // diameter_px ≈ R * viewport / (d * tan(fov/2)); want diameter = fit * avail
+    const distV = (RADIUS * h) / (fit * availH * Math.tan(vFov / 2));
+    const distH = (RADIUS * w) / (fit * availW * Math.tan(hFov / 2));
     return Math.max(distV, distH, MIN_DIST + 0.2);
   }
 
@@ -549,9 +575,10 @@ export function createMoonGlobe(canvas, options = {}) {
   }
 
   function fitToHost() {
-    const host = canvas.parentElement || canvas;
-    const rect = host.getBoundingClientRect();
-    resize(rect.width || window.innerWidth, rect.height || window.innerHeight);
+    // Full window — not the old inset host box
+    const w = window.innerWidth || document.documentElement.clientWidth;
+    const h = window.innerHeight || document.documentElement.clientHeight;
+    resize(w, h);
   }
 
   function resetView() {
@@ -578,6 +605,7 @@ export function createMoonGlobe(canvas, options = {}) {
 
   function onTouchStart(e) {
     e.preventDefault();
+    e.stopPropagation();
     loadTouches(e.touches);
     if (e.touches.length >= 2) {
       const g = twoFingerGeom();
@@ -592,6 +620,7 @@ export function createMoonGlobe(canvas, options = {}) {
 
   function onTouchMove(e) {
     e.preventDefault();
+    e.stopPropagation();
     loadTouches(e.touches);
 
     if (e.touches.length >= 2) {
@@ -607,12 +636,16 @@ export function createMoonGlobe(canvas, options = {}) {
       const spanRatio = g.span / Math.max(twoBase.span, 1);
       const spanChange = Math.abs(Math.log(Math.max(spanRatio, 1e-6)));
 
-      // 2fs — always pan
-      panCamera(dMidX, dMidY);
+      // 2fs = pan (always on midpoint motion)
+      if (Math.abs(dMidX) >= 0.5 || Math.abs(dMidY) >= 0.5) {
+        panCamera(dMidX, dMidY);
+      }
 
-      // Pinch — frame-to-frame only (no big first step)
+      // Pinch zoom (frame-to-frame) — works zoomed in or out
       if (spanChange > PINCH_EPS) {
-        setCamDist(camDist() / Math.pow(Math.max(spanRatio, 0.05), PINCH_POWER));
+        setCamDist(
+          camDist() / Math.pow(Math.max(spanRatio, 0.05), PINCH_POWER)
+        );
       }
 
       twoBase.span = g.span;

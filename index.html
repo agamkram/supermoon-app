@@ -42,24 +42,17 @@
     #stage {
       position: fixed;
       inset: 0;
-      padding:
-        max(0.5rem, env(safe-area-inset-top))
-        max(0.5rem, env(safe-area-inset-right))
-        max(0.5rem, env(safe-area-inset-bottom))
-        max(0.5rem, env(safe-area-inset-left));
     }
 
+    /* Full viewport — zoom can fill the whole screen (no top/bottom clip box) */
     #moon-host {
-      position: absolute;
-      top: max(0.35rem, env(safe-area-inset-top));
-      left: max(0.35rem, env(safe-area-inset-left));
-      right: max(0.35rem, env(safe-area-inset-right));
-      /* Bottom free for info box; home moon fills this host with light padding */
-      bottom: calc(15.5rem + env(safe-area-inset-bottom, 0px));
+      position: fixed;
+      inset: 0;
+      z-index: 1;
       overflow: hidden;
     }
 
-    /* Full-screen gesture layer (phone 2fs / pinch / 1-finger) */
+    /* Gesture layer above canvas, under real UI controls */
     #touch-plane {
       position: fixed;
       inset: 0;
@@ -339,7 +332,7 @@
 
   <script src="astronomy.js"></script>
   <script type="module">
-    import { createMoonGlobe } from "./moon.js?v=50";
+    import { createMoonGlobe } from "./moon.js?v=51";
 
     const STORAGE_KEY = "moon-globe-loc-v1";
     const SYNODIC = 29.530588853;
@@ -438,7 +431,7 @@
       liveBtn.classList.toggle("is-preview", previewMode);
       liveBtn.classList.toggle("is-live", !previewMode);
       liveBtn.textContent = previewMode ? "Use live" : "Live";
-      if (!previewMode) sliderLabel.textContent = "Live · v50";
+      if (!previewMode) sliderLabel.textContent = "Live · v51";
     }
 
     function goLive() {
