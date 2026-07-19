@@ -1,29 +1,28 @@
 /**
- * Hi-res 3D Moon — rotate / zoom / pan · double-tap reset.
- * Phase lighting from ephemeris + observer lat/lon.
+ * Hi-res 3D Moon
+ * 1-finger orbit (pole stop, footprint) · pinch zoom · 2-finger pan · Live/home reset
  */
 import * as THREE from "three";
-import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 
 const RADIUS = 1;
-/** How much of the host’s shorter side the disk fills at home ( <1 keeps clear of edges ). */
-const HOME_FILL = 0.86;
-const MIN_DIST = 1.12;
-const TAP_SLOP = 14;
-const DOUBLE_TAP_MS = 320;
-/** Closer than this fraction of home distance → drag pans (explore); else rotate. */
-const ZOOM_PAN_FRAC = 0.93;
+/** Home disk fill of the moon host (light padding). */
+const HOME_FILL = 0.9;
+/** Close zoom — disk can leave the frame. */
+const MIN_DIST = 1.02;
+const MIN_POLAR = 0.15;
+const MAX_POLAR = Math.PI - 0.15;
+/** Pinch strength per frame (frame-to-frame span only). */
+const PINCH_POWER = 0.38;
+const PINCH_EPS = 0.006;
+const WHEEL_DOLLY = 0.0012;
+const MAX_PAN = RADIUS * 24;
 
 /**
- * Three.js SphereGeometry puts equirect u=0.5 (map center / 0° lon) on +X.
- * Camera is on +Z looking at the origin (sees the +Z face).
- * Right-hand yaw: y = −π/2 takes +X → +Z, so near-side center faces Earth.
- * Do NOT use scale.y = -1 to “fix poles” — that turns the mesh inside-out
- * (upside-down + mirrored). North is already image-top with flipY + sphere UVs.
+ * Three.js SphereGeometry: equirect u=0.5 on +X.
+ * Camera on +Z; NEAR_SIDE_Y puts map center on +Z (Earth view).
  */
 const NEAR_SIDE_Y = -Math.PI / 2;
 
-// Err toward detail/res on common phones (8K color + strong normals + dense mesh).
 const LOD = {
   low: { map: "moon-2k.jpg", normal: "moon-normal-2k.jpg", segments: 128, normalScale: 1.55 },
   high: { map: "moon-8k.jpg", normal: "moon-normal-4k.jpg", segments: 224, normalScale: 2.25 },
@@ -47,7 +46,6 @@ function phaseName(phase01) {
   return "Waning Crescent";
 }
 
-/** Parallactic angle (rad): disk roll as seen from lat/lon at `date`. */
 function skyRollRad(latDeg, lonDeg, date) {
   const A = globalThis.Astronomy;
   if (!A) return 0;
@@ -73,6 +71,9 @@ function skyRollRad(latDeg, lonDeg, date) {
 
 export function createMoonGlobe(canvas, options = {}) {
   const { onReady = null, onQuality = null, onPhase = null } = options;
+  const surface =
+    (typeof document !== "undefined" && document.getElementById("touch-plane")) ||
+    canvas;
 
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(40, 1, 0.05, 80);
@@ -88,9 +89,9 @@ export function createMoonGlobe(canvas, options = {}) {
   renderer.setClearColor(0x020308, 1);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  // Keep contrast so phase terminator stays crisp
   renderer.toneMappingExposure = 1.0;
 
+  // moonGroup at orbit target (always); mesh = near-side + libration
   const moonGroup = new THREE.Group();
   scene.add(moonGroup);
 
@@ -104,24 +105,17 @@ export function createMoonGlobe(canvas, options = {}) {
   let width = 0;
   let height = 0;
   let homeDist = 3.2;
-  let controlMode = "orbit"; // "orbit" | "explore"
 
-  /**
-   * Lighting profiles — dualMode blends earth ↔ orbit by camera angle.
-   * REVERT: set dualMode: false (uses `orbit` numbers only, previous “readable dark”).
-   */
   const LIGHTING = {
-    dualMode: true, // false = always use `orbit` (easy revert)
+    dualMode: true,
     keyBase: 2.0,
     keyFracGain: 0.85,
-    // Face-on Earth view: punchy crescent / terminator
     earth: {
       ambient: 0.04,
       earthshineBase: 0.1,
       earthshineNewGain: 0.36,
       emissive: 0.04,
     },
-    // Orbiting / night side: readable craters
     orbit: {
       ambient: 0.09,
       earthshineBase: 0.18,
@@ -135,7 +129,6 @@ export function createMoonGlobe(canvas, options = {}) {
   scene.add(key.target);
   key.target.position.set(0, 0, 0);
 
-  // Earthshine only from Earth (+Z) — lights the night *near side*, not a global wash
   const earthshine = new THREE.DirectionalLight(0x9eb4d4, LIGHTING.orbit.earthshineBase);
   earthshine.position.set(0, 0.1, 10);
   scene.add(earthshine);
@@ -146,44 +139,30 @@ export function createMoonGlobe(canvas, options = {}) {
   let lastFrac = 0.5;
   const _camDir = new THREE.Vector3();
 
-  const controls = new OrbitControls(camera, canvas);
-  controls.enableDamping = true;
-  controls.dampingFactor = 0.08;
-  controls.enablePan = true;
-  controls.screenSpacePanning = true;
-  controls.enableZoom = true;
-  controls.minDistance = MIN_DIST;
-  controls.maxDistance = homeDist;
-  controls.rotateSpeed = 0.55;
-  controls.zoomSpeed = 5.2;
-  controls.panSpeed = 0.85;
-  controls.target.set(0, 0, 0);
-  controls.minPolarAngle = 0.01;
-  controls.maxPolarAngle = Math.PI - 0.01;
-  // Home: rotate. Zoomed-in explore: one-finger pan so the moon can be moved on screen.
-  controls.touches.ONE = THREE.TOUCH.ROTATE;
-  controls.touches.TWO = THREE.TOUCH.DOLLY_PAN;
-  controls.mouseButtons.LEFT = THREE.MOUSE.ROTATE;
-  controls.mouseButtons.RIGHT = THREE.MOUSE.PAN;
-  controls.mouseButtons.MIDDLE = THREE.MOUSE.DOLLY;
+  // —— Camera: orbit around `target`; moon sits on `target` (no swing) ——
+  const target = new THREE.Vector3(0, 0, 0);
+  const spherical = new THREE.Spherical();
+  const _offset = new THREE.Vector3();
+  const _panRight = new THREE.Vector3();
+  const _panUp = new THREE.Vector3();
 
-  let pointerDown = null;
-  let lastTapAt = 0;
+  /** @type {Map<number, { x: number, y: number }>} */
+  const fingers = new Map();
+  /** @type {null | { id: number, x: number, y: number }} */
+  let orbitDrag = null;
+  /** @type {null | { span: number, midX: number, midY: number }} */
+  let twoBase = null;
 
   let observerLat = 0;
   let observerLon = 0;
   let when = new Date();
   let lastPhaseInfo = null;
-
-  // Compromise while scrubbing: freeze sky *roll* (location/time of day),
-  // but still let libration follow the phase date (moon rocks a little).
   let orientLocked = false;
   let frozenRoll = 0;
   let frozenSouthern = false;
 
   function configureColor(tex) {
     tex.colorSpace = THREE.SRGBColorSpace;
-    // Equirect maps: keep north at image top aligned with SphereGeometry north (+Y)
     tex.flipY = true;
     tex.anisotropy = Math.min(16, renderer.capabilities.getMaxAnisotropy());
     tex.minFilter = THREE.LinearMipmapLinearFilter;
@@ -219,8 +198,6 @@ export function createMoonGlobe(canvas, options = {}) {
       normalScale: new THREE.Vector2(cfg.normalScale, cfg.normalScale),
       roughness: 0.9,
       metalness: 0.0,
-      // Very low self-glow so orbited night terrain has a whisper of albedo —
-      // not enough to flatten phase contrast from the Earth view.
       emissiveMap: map,
       emissive: new THREE.Color(0xffffff),
       emissiveIntensity: LIGHTING.orbit.emissive,
@@ -297,11 +274,6 @@ export function createMoonGlobe(canvas, options = {}) {
     frozenRoll = skyRollRad(observerLat, observerLon, date);
   }
 
-  /**
-   * Lighting always follows `when` (phase).
-   * Sky roll: live for location, or frozen while scrubbing (keeps calm).
-   * Libration: always follows `when` — the real small rock over a month.
-   */
   function applyEphemeris() {
     const A = globalThis.Astronomy;
     if (!A) return;
@@ -316,7 +288,6 @@ export function createMoonGlobe(canvas, options = {}) {
     _toSun.set(sun.x - moon.x, sun.y - moon.y, sun.z - moon.z).normalize();
     _toEarth.set(-moon.x, -moon.y, -moon.z).normalize();
 
-    // Basis: Z → Earth (camera), Y ≈ north, X ≈ east
     _zAxis.copy(_toEarth);
     _xAxis.crossVectors(_worldUp, _zAxis);
     if (_xAxis.lengthSq() < 1e-10) _xAxis.set(1, 0, 0);
@@ -328,36 +299,28 @@ export function createMoonGlobe(canvas, options = {}) {
     const lz = _toSun.dot(_zAxis);
 
     lastFrac = frac;
-    // Sun key dominates — this is the phase terminator (same in both modes)
-    key.position.set(lx, ly, lz).multiplyScalar(12);
+    key.position.set(lx, ly, lz).multiplyScalar(12).add(target);
+    key.target.position.copy(target);
     key.intensity = LIGHTING.keyBase + frac * LIGHTING.keyFracGain;
-    // Earthshine from Earth only; strength set in updateViewLighting
-    earthshine.position.set(0.04, 0.08, 10);
+    earthshine.position.set(0.04, 0.08, 10).add(target);
     updateViewLighting();
 
-    // Libration always tracks the phase date (subtle face rock)
     const lib = A.Libration(time);
     const southern = orientLocked ? frozenSouthern : observerLat < 0;
-
-    // Live Earth view = north-up chart orientation (familiar face).
-    // Parallactic “sky tilt” was rolling the disk so poles looked wrong and
-    // needed a clockwise drag to “fix” — disable for default/Live.
-    // (Can return later as an optional sky-pose mode.)
     const roll = 0;
 
     if (mesh) {
-      // YXZ: yaw near-side to camera, tip for lat libration (north-up)
       mesh.rotation.order = "YXZ";
       mesh.rotation.y = NEAR_SIDE_Y + lib.elon * A.DEG2RAD;
       mesh.rotation.x = -lib.elat * A.DEG2RAD;
       mesh.rotation.z = 0;
     }
-    // Southern hemisphere: 180° around the view axis (classic N/S flip)
     const zRot = southern ? Math.PI : 0;
     moonGroup.rotation.set(0, 0, zRot);
+    moonGroup.position.copy(target);
     const viewZ = new THREE.Vector3(0, 0, 1);
-    key.position.applyAxisAngle(viewZ, zRot);
-    earthshine.position.applyAxisAngle(viewZ, zRot);
+    key.position.sub(target).applyAxisAngle(viewZ, zRot).add(target);
+    earthshine.position.sub(target).applyAxisAngle(viewZ, zRot).add(target);
 
     lastPhaseInfo = {
       phase01,
@@ -383,18 +346,11 @@ export function createMoonGlobe(canvas, options = {}) {
     while (lo > 180) lo -= 360;
     while (lo < -180) lo += 360;
     observerLon = lo;
-    // New place: refresh frozen sky pose from *now* so location still matters mid-scrub
     if (orientLocked) captureSkyPose(new Date());
     applyEphemeris();
     return getPhaseInfo();
   }
 
-  /**
-   * @param {Date|number|string} [date]
-   * @param {{ lockOrient?: boolean, orientDate?: Date }} [opts]
-   *   lockOrient true  → freeze sky pose (first time) for calm phase scrubbing
-   *   lockOrient false → live sky pose for location + time
-   */
   function setTime(date = new Date(), opts = {}) {
     when = date instanceof Date ? date : new Date(date);
     if (opts.lockOrient === false) {
@@ -415,10 +371,8 @@ export function createMoonGlobe(canvas, options = {}) {
     return { lat: observerLat, lon: observerLon };
   }
 
-  /** 1 = face-on Earth view (crescent contrast), 0 = orbiting / night side (readable). */
   function earthViewAmount() {
-    _camDir.copy(camera.position).sub(controls.target).normalize();
-    // Near side faces +Z; face-on when looking along +Z
+    _camDir.copy(camera.position).sub(target).normalize();
     return THREE.MathUtils.smoothstep(0.38, 0.88, _camDir.z);
   }
 
@@ -430,9 +384,7 @@ export function createMoonGlobe(canvas, options = {}) {
     const frac = lastFrac;
     const e = LIGHTING.earth;
     const o = LIGHTING.orbit;
-    // dualMode off → always orbit profile (previous single-look)
     const t = LIGHTING.dualMode ? earthViewAmount() : 0;
-    // t=1 earth (high contrast), t=0 orbit (lifted dark)
     ambient.intensity = lerp(o.ambient, e.ambient, t);
     earthshine.intensity =
       lerp(o.earthshineBase, e.earthshineBase, t) +
@@ -443,89 +395,157 @@ export function createMoonGlobe(canvas, options = {}) {
     key.intensity = LIGHTING.keyBase + frac * LIGHTING.keyFracGain;
   }
 
-  /** Camera distance so a unit sphere fills HOME_FILL of the shorter viewport side. */
+  // —— Camera helpers ——
+
+  function readSpherical() {
+    _offset.copy(camera.position).sub(target);
+    if (_offset.lengthSq() < 1e-12) _offset.set(0, 0, homeDist || 3);
+    spherical.setFromVector3(_offset);
+  }
+
+  function writeCamera() {
+    spherical.phi = THREE.MathUtils.clamp(spherical.phi, MIN_POLAR, MAX_POLAR);
+    spherical.radius = THREE.MathUtils.clamp(
+      spherical.radius,
+      MIN_DIST,
+      Math.max(homeDist, MIN_DIST + 0.2)
+    );
+    spherical.makeSafe();
+    _offset.setFromSpherical(spherical);
+    camera.position.copy(target).add(_offset);
+    camera.up.set(0, 1, 0);
+    camera.lookAt(target);
+  }
+
+  function camDist() {
+    return camera.position.distanceTo(target);
+  }
+
+  function syncMoonToTarget() {
+    moonGroup.position.copy(target);
+    key.target.position.copy(target);
+  }
+
   function computeHomeDistance(w, h) {
     const aspect = Math.max(w, 1) / Math.max(h, 1);
     const vFov = THREE.MathUtils.degToRad(camera.fov);
     const hFov = 2 * Math.atan(Math.tan(vFov / 2) * aspect);
-    // Distance so radius RADIUS subtends half the fitted size
     const fit = HOME_FILL;
     const distV = RADIUS / (fit * Math.tan(vFov / 2));
     const distH = RADIUS / (fit * Math.tan(hFov / 2));
     return Math.max(distV, distH, MIN_DIST + 0.2);
   }
 
-  function applyHomeFraming(force = false) {
-    const wasHome =
-      !force &&
-      controls.target.lengthSq() < 1e-6 &&
-      Math.abs(camera.position.distanceTo(controls.target) - homeDist) < 0.04;
-    controls.target.set(0, 0, 0);
+  /** Starting place + size + face-on. */
+  function applyHomeFraming() {
+    target.set(0, 0, 0);
+    syncMoonToTarget();
     camera.up.set(0, 1, 0);
     camera.position.set(0, 0, homeDist);
-    controls.minDistance = MIN_DIST;
-    controls.maxDistance = homeDist;
-    controls.update();
-    setControlMode("orbit");
-    return wasHome;
+    readSpherical();
+    writeCamera();
+    applyEphemeris();
   }
 
-  function setControlMode(mode) {
-    if (mode === controlMode) return;
-    controlMode = mode;
-    if (mode === "explore") {
-      // Drag moves the moon on screen; pinch zooms; two-finger can still orbit a bit
-      controls.touches.ONE = THREE.TOUCH.PAN;
-      controls.touches.TWO = THREE.TOUCH.DOLLY_ROTATE;
-      controls.mouseButtons.LEFT = THREE.MOUSE.PAN;
-      controls.panSpeed = 1.15;
-    } else {
-      controls.touches.ONE = THREE.TOUCH.ROTATE;
-      controls.touches.TWO = THREE.TOUCH.DOLLY_PAN;
-      controls.mouseButtons.LEFT = THREE.MOUSE.ROTATE;
-      controls.panSpeed = 0.85;
-    }
-  }
-
-  function updateZoomInteraction() {
-    const dist = camera.position.distanceTo(controls.target);
-    // Fully zoomed out → snap home (size + centered at top host)
-    if (dist >= homeDist * 0.985) {
-      if (
-        controls.target.lengthSq() > 1e-5 ||
-        Math.abs(dist - homeDist) > 0.02 ||
-        Math.abs(camera.position.x) > 0.02 ||
-        Math.abs(camera.position.y) > 0.02
-      ) {
-        applyHomeFraming(true);
-      } else {
-        setControlMode("orbit");
-      }
+  /**
+   * Zoom. Pinch/spread uses frame deltas only.
+   * Reaching max distance from a closer view → full home.
+   */
+  function setCamDist(dist) {
+    const prev = camDist();
+    const maxD = Math.max(homeDist, MIN_DIST + 0.2);
+    dist = THREE.MathUtils.clamp(dist, MIN_DIST, maxD);
+    if (dist >= homeDist - 1e-4 && prev < homeDist * 0.99) {
+      applyHomeFraming();
       return;
     }
-    // Zoomed in: pan to explore; keep target from flying too far from the moon
-    setControlMode(dist < homeDist * ZOOM_PAN_FRAC ? "explore" : "orbit");
-    const maxPan = RADIUS * 1.15;
-    if (controls.target.length() > maxPan) {
-      controls.target.setLength(maxPan);
+    readSpherical();
+    spherical.radius = dist;
+    writeCamera();
+  }
+
+  /** 2fs: move moon + camera + look-at together. */
+  function panCamera(dxPx, dyPx) {
+    if (Math.abs(dxPx) < 0.5 && Math.abs(dyPx) < 0.5) return;
+    const dist = Math.max(camDist(), MIN_DIST);
+    const vFov = THREE.MathUtils.degToRad(camera.fov);
+    const worldPerPx = (2 * dist * Math.tan(vFov / 2)) / Math.max(height, 1);
+    _panRight.set(1, 0, 0).applyQuaternion(camera.quaternion);
+    _panUp.set(0, 1, 0).applyQuaternion(camera.quaternion);
+    const sx = -dxPx * worldPerPx;
+    const sy = dyPx * worldPerPx;
+    target.addScaledVector(_panRight, sx);
+    target.addScaledVector(_panUp, sy);
+    camera.position.addScaledVector(_panRight, sx);
+    camera.position.addScaledVector(_panUp, sy);
+
+    const horiz = Math.hypot(target.x, target.z);
+    if (horiz > MAX_PAN) {
+      const s = MAX_PAN / horiz;
+      const nx = target.x * s;
+      const nz = target.z * s;
+      camera.position.x += nx - target.x;
+      camera.position.z += nz - target.z;
+      target.x = nx;
+      target.z = nz;
     }
+    if (Math.abs(target.y) > MAX_PAN) {
+      const ny = Math.sign(target.y) * MAX_PAN;
+      camera.position.y += ny - target.y;
+      target.y = ny;
+    }
+    syncMoonToTarget();
+    readSpherical();
+  }
+
+  function twoFingerGeom() {
+    if (fingers.size < 2) return null;
+    const ids = [...fingers.keys()].sort((a, b) => a - b);
+    const a = fingers.get(ids[0]);
+    const b = fingers.get(ids[1]);
+    if (!a || !b) return null;
+    const dx = a.x - b.x;
+    const dy = a.y - b.y;
+    return {
+      span: Math.max(Math.hypot(dx, dy), 1),
+      midX: (a.x + b.x) / 2,
+      midY: (a.y + b.y) / 2,
+    };
+  }
+
+  function rotateSpeed() {
+    const dist = camDist();
+    const t = THREE.MathUtils.clamp(
+      (dist - MIN_DIST) / Math.max(homeDist - MIN_DIST, 0.01),
+      0,
+      1
+    );
+    const z = t * t;
+    return THREE.MathUtils.lerp(0.28, 0.55, z);
   }
 
   function resize(cssW, cssH) {
     const w = Math.max(1, Math.round(cssW));
     const h = Math.max(1, Math.round(cssH));
     if (w === width && h === height) return;
+
     const prevHome = homeDist;
-    const dist = camera.position.distanceTo(controls.target);
-    const atHome = dist >= prevHome * 0.97 && controls.target.lengthSq() < 1e-4;
+    const dist = camDist();
+    const atHome = dist >= prevHome * 0.97 && target.lengthSq() < 1e-4;
+    const zoomFrac = prevHome > 0 ? dist / prevHome : 1;
+
     width = w;
     height = h;
+    canvas.style.width = `${w}px`;
+    canvas.style.height = `${h}px`;
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2.5));
     renderer.setSize(w, h, false);
+
     homeDist = computeHomeDistance(w, h);
-    controls.maxDistance = homeDist;
-    if (atHome) applyHomeFraming(true);
+    if (atHome) applyHomeFraming();
+    else setCamDist(homeDist * zoomFrac);
   }
 
   function fitToHost() {
@@ -539,54 +559,171 @@ export function createMoonGlobe(canvas, options = {}) {
     camera.near = 0.05;
     camera.far = 80;
     camera.updateProjectionMatrix();
-    applyHomeFraming(true);
+    homeDist = computeHomeDistance(
+      width || window.innerWidth,
+      height || window.innerHeight
+    );
+    applyHomeFraming();
   }
 
-  function onPointerDown(e) {
-    if (e.pointerType === "mouse" && e.button !== 0) return;
-    pointerDown = { x: e.clientX, y: e.clientY, t: performance.now() };
+  // —— Touch (phone): 1 = orbit, 2fs = pan, pinch = zoom ——
+
+  function loadTouches(list) {
+    fingers.clear();
+    for (let i = 0; i < list.length; i++) {
+      const t = list[i];
+      fingers.set(t.identifier, { x: t.clientX, y: t.clientY });
+    }
   }
 
-  function onPointerUp(e) {
-    if (!pointerDown) return;
-    const dx = e.clientX - pointerDown.x;
-    const dy = e.clientY - pointerDown.y;
-    const dt = performance.now() - pointerDown.t;
-    pointerDown = null;
-    if (dx * dx + dy * dy > TAP_SLOP * TAP_SLOP) return;
-    if (dt > 500) return;
+  function onTouchStart(e) {
+    e.preventDefault();
+    loadTouches(e.touches);
+    if (e.touches.length >= 2) {
+      const g = twoFingerGeom();
+      twoBase = g ? { span: g.span, midX: g.midX, midY: g.midY } : null;
+      orbitDrag = null;
+    } else if (e.touches.length === 1) {
+      twoBase = null;
+      const t = e.touches[0];
+      orbitDrag = { id: t.identifier, x: t.clientX, y: t.clientY };
+    }
+  }
 
-    const now = performance.now();
-    if (now - lastTapAt < DOUBLE_TAP_MS) {
-      lastTapAt = 0;
-      resetView();
+  function onTouchMove(e) {
+    e.preventDefault();
+    loadTouches(e.touches);
+
+    if (e.touches.length >= 2) {
+      const g = twoFingerGeom();
+      if (!g) return;
+      if (!twoBase) {
+        twoBase = { span: g.span, midX: g.midX, midY: g.midY };
+        return;
+      }
+
+      const dMidX = g.midX - twoBase.midX;
+      const dMidY = g.midY - twoBase.midY;
+      const spanRatio = g.span / Math.max(twoBase.span, 1);
+      const spanChange = Math.abs(Math.log(Math.max(spanRatio, 1e-6)));
+
+      // 2fs — always pan
+      panCamera(dMidX, dMidY);
+
+      // Pinch — frame-to-frame only (no big first step)
+      if (spanChange > PINCH_EPS) {
+        setCamDist(camDist() / Math.pow(Math.max(spanRatio, 0.05), PINCH_POWER));
+      }
+
+      twoBase.span = g.span;
+      twoBase.midX = g.midX;
+      twoBase.midY = g.midY;
       return;
     }
-    lastTapAt = now;
+
+    if (e.touches.length === 1 && orbitDrag) {
+      const t = e.touches[0];
+      const dx = t.clientX - orbitDrag.x;
+      const dy = t.clientY - orbitDrag.y;
+      const h = Math.max(height, 1);
+      const speed = rotateSpeed();
+      readSpherical();
+      spherical.theta -= (2 * Math.PI * dx * speed) / h;
+      spherical.phi -= (2 * Math.PI * dy * speed) / h;
+      writeCamera();
+      orbitDrag.x = t.clientX;
+      orbitDrag.y = t.clientY;
+    }
   }
 
-  function onPointerCancel() {
-    pointerDown = null;
+  function onTouchEnd(e) {
+    loadTouches(e.touches);
+    if (e.touches.length >= 2) {
+      const g = twoFingerGeom();
+      twoBase = g ? { span: g.span, midX: g.midX, midY: g.midY } : null;
+      orbitDrag = null;
+    } else if (e.touches.length === 1) {
+      twoBase = null;
+      const t = e.touches[0];
+      orbitDrag = { id: t.identifier, x: t.clientX, y: t.clientY };
+    } else {
+      twoBase = null;
+      orbitDrag = null;
+    }
   }
 
-  canvas.addEventListener("pointerdown", onPointerDown);
-  canvas.addEventListener("pointerup", onPointerUp);
-  canvas.addEventListener("pointercancel", onPointerCancel);
+  // Desktop: left orbit · right/shift-left pan · wheel zoom
+  let mouseMode = null;
+  let mouseLast = null;
+
+  function onMouseDown(e) {
+    if (e.button === 0 && e.shiftKey) mouseMode = "pan";
+    else if (e.button === 0) mouseMode = "orbit";
+    else if (e.button === 2) {
+      mouseMode = "pan";
+      e.preventDefault();
+    } else return;
+    mouseLast = { x: e.clientX, y: e.clientY };
+    window.addEventListener("mousemove", onMouseMove, { passive: false });
+    window.addEventListener("mouseup", onMouseUp);
+  }
+
+  function onMouseMove(e) {
+    if (!mouseLast || !mouseMode) return;
+    e.preventDefault();
+    const dx = e.clientX - mouseLast.x;
+    const dy = e.clientY - mouseLast.y;
+    mouseLast = { x: e.clientX, y: e.clientY };
+    if (mouseMode === "orbit") {
+      const h = Math.max(height, 1);
+      const speed = rotateSpeed();
+      readSpherical();
+      spherical.theta -= (2 * Math.PI * dx * speed) / h;
+      spherical.phi -= (2 * Math.PI * dy * speed) / h;
+      writeCamera();
+    } else {
+      panCamera(dx, dy);
+    }
+  }
+
+  function onMouseUp() {
+    mouseMode = null;
+    mouseLast = null;
+    window.removeEventListener("mousemove", onMouseMove);
+    window.removeEventListener("mouseup", onMouseUp);
+  }
+
+  function onWheel(e) {
+    e.preventDefault();
+    setCamDist(camDist() * Math.exp(e.deltaY * WHEEL_DOLLY));
+  }
+
+  function onContextMenu(e) {
+    e.preventDefault();
+  }
+
+  const tOpts = { passive: false };
+  surface.addEventListener("touchstart", onTouchStart, tOpts);
+  surface.addEventListener("touchmove", onTouchMove, tOpts);
+  surface.addEventListener("touchend", onTouchEnd);
+  surface.addEventListener("touchcancel", onTouchEnd);
+  surface.addEventListener("mousedown", onMouseDown);
+  surface.addEventListener("wheel", onWheel, tOpts);
+  surface.addEventListener("contextmenu", onContextMenu);
+  surface.style.touchAction = "none";
+  canvas.style.touchAction = "none";
 
   function animate() {
     if (disposed) return;
     animId = requestAnimationFrame(animate);
-    controls.update();
-    updateZoomInteraction();
     updateViewLighting();
     renderer.render(scene, camera);
   }
 
-  // Initial ephemeris (geocentric default lat 0 until app sets location)
   applyEphemeris();
   loadLow();
   fitToHost();
-  applyHomeFraming(true);
+  applyHomeFraming();
   animate();
 
   return {
@@ -601,10 +738,15 @@ export function createMoonGlobe(canvas, options = {}) {
     dispose() {
       disposed = true;
       cancelAnimationFrame(animId);
-      canvas.removeEventListener("pointerdown", onPointerDown);
-      canvas.removeEventListener("pointerup", onPointerUp);
-      canvas.removeEventListener("pointercancel", onPointerCancel);
-      controls.dispose();
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseUp);
+      surface.removeEventListener("touchstart", onTouchStart);
+      surface.removeEventListener("touchmove", onTouchMove);
+      surface.removeEventListener("touchend", onTouchEnd);
+      surface.removeEventListener("touchcancel", onTouchEnd);
+      surface.removeEventListener("mousedown", onMouseDown);
+      surface.removeEventListener("wheel", onWheel);
+      surface.removeEventListener("contextmenu", onContextMenu);
       if (mesh) {
         mesh.geometry.dispose();
         material?.map?.dispose();

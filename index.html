@@ -22,6 +22,7 @@
       --muted: #8b95a8;
       --panel: rgba(8, 12, 20, 0.72);
       --line: rgba(255, 255, 255, 0.1);
+      /* Moon host bottom inset = room for bottom info assembly */
     }
 
     * { box-sizing: border-box; }
@@ -53,9 +54,18 @@
       top: max(0.35rem, env(safe-area-inset-top));
       left: max(0.35rem, env(safe-area-inset-left));
       right: max(0.35rem, env(safe-area-inset-right));
-      /* Keep globe above the control card so home fit never sits under UI */
-      bottom: calc(6.75rem + env(safe-area-inset-bottom, 0px));
+      /* Bottom free for info box; home moon fills this host with light padding */
+      bottom: calc(15.5rem + env(safe-area-inset-bottom, 0px));
       overflow: hidden;
+    }
+
+    /* Full-screen gesture layer (phone 2fs / pinch / 1-finger) */
+    #touch-plane {
+      position: fixed;
+      inset: 0;
+      z-index: 2;
+      touch-action: none;
+      background: transparent;
     }
 
     #moon-canvas {
@@ -73,7 +83,7 @@
 
     .chrome {
       position: fixed;
-      z-index: 2;
+      z-index: 4;
       left: 0;
       right: 0;
       top: 0;
@@ -108,10 +118,18 @@
       border: 1px solid var(--line);
       backdrop-filter: blur(12px);
       -webkit-backdrop-filter: blur(12px);
-      pointer-events: auto;
-      touch-action: auto;
+      /* Card chrome does not steal 2fs — only real controls capture */
+      pointer-events: none;
+      touch-action: none;
       display: grid;
       gap: 0.28rem;
+    }
+
+    .loc-bar input,
+    .loc-bar button,
+    .loc-bar input[type="range"] {
+      pointer-events: auto;
+      touch-action: manipulation;
     }
 
     .loc-row {
@@ -271,9 +289,10 @@
     <div id="moon-host">
       <canvas
         id="moon-canvas"
-        aria-label="3D Moon with live phase shading. Drag to rotate, scroll or pinch to zoom, double-tap to reset."
+        aria-label="3D Moon. One finger rotates, pinch zooms, two-finger slide pans. Live resets."
       ></canvas>
     </div>
+    <div id="touch-plane" aria-hidden="true"></div>
   </div>
 
   <header class="chrome">
@@ -320,7 +339,7 @@
 
   <script src="astronomy.js"></script>
   <script type="module">
-    import { createMoonGlobe } from "./moon.js";
+    import { createMoonGlobe } from "./moon.js?v=50";
 
     const STORAGE_KEY = "moon-globe-loc-v1";
     const SYNODIC = 29.530588853;
@@ -419,7 +438,7 @@
       liveBtn.classList.toggle("is-preview", previewMode);
       liveBtn.classList.toggle("is-live", !previewMode);
       liveBtn.textContent = previewMode ? "Use live" : "Live";
-      if (!previewMode) sliderLabel.textContent = "Live · your sky";
+      if (!previewMode) sliderLabel.textContent = "Live · v50";
     }
 
     function goLive() {
