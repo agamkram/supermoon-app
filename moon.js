@@ -70,8 +70,12 @@ function skyRollRad(latDeg, lonDeg, date) {
   }
 }
 
+const TAP_SLOP_PX = 12;
+const TAP_MAX_MS = 450;
+
 export function createMoonGlobe(canvas, options = {}) {
-  const { onReady = null, onQuality = null, onPhase = null } = options;
+  const { onReady = null, onQuality = null, onPhase = null, onTap = null } =
+    options;
   const surface =
     (typeof document !== "undefined" && document.getElementById("touch-plane")) ||
     canvas;
@@ -664,6 +668,13 @@ export function createMoonGlobe(canvas, options = {}) {
     };
   }
 
+  function fireTapIfAny(gesture) {
+    if (!gesture || typeof onTap !== "function") return;
+    if (gesture.moved) return;
+    if (Date.now() - gesture.t0 > TAP_MAX_MS) return;
+    onTap();
+  }
+
   function onTouchStart(e) {
     if (e.touches.length === 1 && isFormControl(e.target)) return;
     e.preventDefault();
@@ -672,7 +683,9 @@ export function createMoonGlobe(canvas, options = {}) {
       oneFinger = null;
     } else if (e.touches.length === 1) {
       twoFinger = null;
-      oneFinger = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+      const x = e.touches[0].clientX;
+      const y = e.touches[0].clientY;
+      oneFinger = { x, y, sx: x, sy: y, t0: Date.now(), moved: false };
     }
   }
 
@@ -701,6 +714,10 @@ export function createMoonGlobe(canvas, options = {}) {
 
     if (oneFinger && e.touches.length === 1) {
       const t = e.touches[0];
+      const fromStart = Math.hypot(t.clientX - oneFinger.sx, t.clientY - oneFinger.sy);
+      if (fromStart > TAP_SLOP_PX) oneFinger.moved = true;
+      // Don't orbit until past tap slop (keeps tap clean)
+      if (!oneFinger.moved) return;
       const dx = t.clientX - oneFinger.x;
       const dy = t.clientY - oneFinger.y;
       const h = Math.max(height, 1);
@@ -715,7 +732,8 @@ export function createMoonGlobe(canvas, options = {}) {
       spherical.theta -= (2 * Math.PI * dx * speed) / h;
       spherical.phi -= (2 * Math.PI * dy * speed) / h;
       writeCamera();
-      oneFinger = { x: t.clientX, y: t.clientY };
+      oneFinger.x = t.clientX;
+      oneFinger.y = t.clientY;
     }
   }
 
@@ -725,8 +743,11 @@ export function createMoonGlobe(canvas, options = {}) {
       oneFinger = null;
     } else if (e.touches.length === 1) {
       twoFinger = null;
-      oneFinger = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+      const x = e.touches[0].clientX;
+      const y = e.touches[0].clientY;
+      oneFinger = { x, y, sx: x, sy: y, t0: Date.now(), moved: false };
     } else {
+      fireTapIfAny(oneFinger);
       twoFinger = null;
       oneFinger = null;
     }
@@ -786,6 +807,7 @@ export function createMoonGlobe(canvas, options = {}) {
 
   let mouseMode = null;
   let mouseLast = null;
+  let mouseGesture = null;
 
   function onMouseDown(e) {
     if (isFormControl(e.target)) return;
@@ -796,6 +818,12 @@ export function createMoonGlobe(canvas, options = {}) {
       e.preventDefault();
     } else return;
     mouseLast = { x: e.clientX, y: e.clientY };
+    mouseGesture = {
+      sx: e.clientX,
+      sy: e.clientY,
+      t0: Date.now(),
+      moved: false,
+    };
     window.addEventListener("mousemove", onMouseMove, { passive: false });
     window.addEventListener("mouseup", onMouseUp);
   }
@@ -803,6 +831,14 @@ export function createMoonGlobe(canvas, options = {}) {
   function onMouseMove(e) {
     if (!mouseLast || !mouseMode) return;
     e.preventDefault();
+    if (mouseGesture) {
+      const fromStart = Math.hypot(
+        e.clientX - mouseGesture.sx,
+        e.clientY - mouseGesture.sy
+      );
+      if (fromStart > TAP_SLOP_PX) mouseGesture.moved = true;
+      if (!mouseGesture.moved) return;
+    }
     const dx = e.clientX - mouseLast.x;
     const dy = e.clientY - mouseLast.y;
     mouseLast = { x: e.clientX, y: e.clientY };
@@ -818,8 +854,10 @@ export function createMoonGlobe(canvas, options = {}) {
   }
 
   function onMouseUp() {
+    fireTapIfAny(mouseGesture);
     mouseMode = null;
     mouseLast = null;
+    mouseGesture = null;
     window.removeEventListener("mousemove", onMouseMove);
     window.removeEventListener("mouseup", onMouseUp);
   }

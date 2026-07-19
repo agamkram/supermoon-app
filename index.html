@@ -403,6 +403,42 @@
       opacity: 0.65;
       text-shadow: 0 1px 8px rgba(0, 0, 0, 0.65);
     }
+
+    /* Night-vision red (~650 nm feel) — tap moon to enter, tap screen to exit */
+    .red-mode {
+      position: fixed;
+      inset: 0;
+      z-index: 200;
+      background: #1a0000;
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      padding:
+        env(safe-area-inset-top)
+        env(safe-area-inset-right)
+        max(1rem, env(safe-area-inset-bottom))
+        env(safe-area-inset-left);
+      cursor: pointer;
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .red-mode[hidden] {
+      display: none !important;
+    }
+
+    .red-mode-hint {
+      margin: 0 0 0.5rem;
+      font-family: "DM Sans", system-ui, sans-serif;
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: #4a0000;
+      text-align: center;
+      pointer-events: none;
+      user-select: none;
+    }
   </style>
   <script type="importmap">
   {
@@ -418,10 +454,21 @@
     <div id="moon-host">
       <canvas
         id="moon-canvas"
-        aria-label="3D Moon. One finger rotates, pinch zooms, two-finger slide pans. Live resets."
+        aria-label="3D Moon. One finger rotates, pinch zooms, two-finger slide pans. Tap for red night mode. Live resets."
       ></canvas>
     </div>
     <div id="touch-plane" aria-hidden="true"></div>
+  </div>
+
+  <div
+    id="red-mode"
+    class="red-mode"
+    hidden
+    role="button"
+    tabindex="0"
+    aria-label="Night vision red. Tap to exit."
+  >
+    <p class="red-mode-hint">Tap to exit · night red</p>
   </div>
 
   <header class="chrome">
@@ -537,7 +584,7 @@
 
   <script src="astronomy.js"></script>
   <script type="module">
-    import { createMoonGlobe } from "./moon.js?v=76";
+    import { createMoonGlobe } from "./moon.js?v=77";
 
     const STORAGE_KEY = "moon-globe-loc-v1";
     const TIDE_STATIONS_KEY = "supermoon-noaa-tide-stations-v4";
@@ -978,7 +1025,7 @@
       if (previewMode) {
         cycleDate.innerHTML = `${fmtDateTime(m.when)}<span class="live-tag">Preview</span>`;
       } else {
-        cycleDate.innerHTML = `${fmtDateTime(m.when)}<span class="live-tag">Live · v76</span>`;
+        cycleDate.innerHTML = `${fmtDateTime(m.when)}<span class="live-tag">Live · v77</span>`;
       }
 
       // Always nearest NOAA prediction station for observer lat/lon
@@ -1042,6 +1089,30 @@
         : livePhase01(sliderAnchorDate);
     }
 
+    const redMode = document.getElementById("red-mode");
+
+    function setRedMode(on) {
+      const active = !!on;
+      redMode.hidden = !active;
+      redMode.setAttribute("aria-hidden", active ? "false" : "true");
+      document.body.classList.toggle("is-red-mode", active);
+    }
+
+    function toggleRedMode() {
+      setRedMode(redMode.hidden);
+    }
+
+    redMode.addEventListener("click", (e) => {
+      e.preventDefault();
+      setRedMode(false);
+    });
+    redMode.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " " || e.key === "Escape") {
+        e.preventDefault();
+        setRedMode(false);
+      }
+    });
+
     const globe = createMoonGlobe(canvas, {
       onReady() {
         canvas.classList.add("is-ready");
@@ -1052,6 +1123,7 @@
         /* quality upgrades stay silent */
       },
       onPhase: showPhase,
+      onTap: toggleRedMode,
     });
 
     function applyLocation(lat, lon, source) {
