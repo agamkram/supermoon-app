@@ -646,7 +646,7 @@
 
   <script src="astronomy.js"></script>
   <script type="module">
-    import { createMoonGlobe } from "./moon.js?v=81";
+    import { createMoonGlobe } from "./moon.js?v=82";
 
     const STORAGE_KEY = "moon-globe-loc-v1";
     const TIDE_STATIONS_KEY = "supermoon-noaa-tide-stations-v5";
@@ -658,9 +658,13 @@
     const MI_PER_KM = 0.621371;
     /** Mean full-moon angular diameter (arcmin) — classic ~31′ */
     const AVG_ANG_ARCMIN = 31.07;
-    /** Prefer our Vercel proxy (NOAA datagetter often 403s in-browser) */
-    const NOAA_STATIONS_URL = "/api/noaa-stations";
-    const NOAA_HILO_URL = "/api/noaa-hilo";
+    /** Proxy first (NOAA datagetter often 403s in-browser); direct mdapi fallback for stations */
+    const NOAA_STATIONS_PROXY = "/api/noaa-stations";
+    const NOAA_STATIONS_DIRECT =
+      "https://api.tidesandcurrents.noaa.gov/mdapi/prod/webapi/stations.json?type=tidepredictions";
+    const NOAA_HILO_PROXY = "/api/noaa-hilo";
+    const NOAA_HILO_DIRECT =
+      "https://api.tidesandcurrents.noaa.gov/api/prod/datagetter";
 
     const canvas = document.getElementById("moon-canvas");
     const status = document.getElementById("status");
@@ -700,7 +704,10 @@
     let previewRaf = 0;
     let metricsRaf = 0;
     let tideSeq = 0;
-    /** @type {Promise<Array<{id:string,lat:number,lng:number}>> | null} */
+    let tideTimer = 0;
+    /** Last successfully resolved station label (avoid flash to —) */
+    let lastTideStationLabel = "";
+    /** @type {Promise<Array<{id:string,lat:number,lng:number,name?:string,state?:string}>> | null} */
     let stationsPromise = null;
     /** @type {{ yr: number, maxAng: number } | null} */
     let yearMaxCache = null;
@@ -747,14 +754,15 @@
       return 2 * R * Math.asin(Math.min(1, Math.sqrt(a)));
     }
 
-    function normalizeStationList(rawList) {
+    function normalizeStationList(rawList, { requireTypeR = false } = {}) {
       return (rawList || [])
         .filter(
           (s) =>
             s &&
             s.id &&
             Number.isFinite(Number(s.lat)) &&
-            Number.isFinite(Number(s.lng))
+            Number.isFinite(Number(s.lng)) &&
+            (!requireTypeR || s.type === "R" || s.type == null)
         )
         .map((s) => ({
           id: String(s.id),
@@ -764,6 +772,28 @@
           state: s.state ? String(s.state).trim() : "",
         }))
         .filter((s) => !INLAND_STATION_RE.test(s.name));
+    }
+
+    async function fetchStationsFromNetwork() {
+      // 1) Vercel proxy (pre-filtered coastal R stations)
+      try {
+        const res = await fetch(NOAA_STATIONS_PROXY);
+        if (res.ok) {
+          const data = await res.json();
+          const list = normalizeStationList(data.stations || data.list || []);
+          if (list.length >= 10) return list;
+        }
+      } catch (_) {}
+
+      // 2) Direct NOAA metadata (works with CORS *)
+      const res = await fetch(NOAA_STATIONS_DIRECT);
+      if (!res.ok) throw new Error("stations fetch failed");
+      const data = await res.json();
+      const list = normalizeStationList(data.stations || [], {
+        requireTypeR: true,
+      });
+      if (list.length < 10) throw new Error("stations list empty");
+      return list;
     }
 
     function loadTideStations() {
@@ -784,12 +814,7 @@
           }
         } catch (_) {}
 
-        const res = await fetch(NOAA_STATIONS_URL);
-        if (!res.ok) throw new Error("stations fetch failed");
-        const data = await res.json();
-        // Proxy returns already-filtered coastal reference stations
-        const list = normalizeStationList(data.stations || data.list || []);
-        if (list.length < 10) throw new Error("stations list empty");
+        const list = await fetchStationsFromNetwork();
         try {
           localStorage.setItem(
             TIDE_STATIONS_KEY,
@@ -832,25 +857,53 @@
       const now = Date.now();
       let t = when instanceof Date ? when.getTime() : now;
       if (!Number.isFinite(t)) t = now;
-      // Keep request within ~30d of now for prediction product availability
       const maxPast = now - 20 * 86400000;
       const maxFuture = now + 40 * 86400000;
       t = Math.min(maxFuture, Math.max(maxPast, t));
       const start = new Date(t - 6 * 3600000);
       const end = new Date(t + 48 * 3600000);
-      const url =
-        `${NOAA_HILO_URL}?` +
-        new URLSearchParams({
-          station: stationId,
-          begin: ymdCompact(start),
-          end: ymdCompact(end),
-        }).toString();
-      const res = await fetch(url);
-      if (!res.ok) throw new Error("predictions failed");
-      const data = await res.json();
-      if (data?.error?.message) throw new Error(data.error.message);
-      if (data?.message === "Forbidden") throw new Error("predictions forbidden");
-      return Array.isArray(data.predictions) ? data.predictions : [];
+      const begin = ymdCompact(start);
+      const endStr = ymdCompact(end);
+
+      async function parsePredictions(res) {
+        if (!res.ok) throw new Error("predictions failed");
+        const data = await res.json();
+        if (data?.error?.message) throw new Error(data.error.message);
+        if (data?.message === "Forbidden") throw new Error("predictions forbidden");
+        if (!Array.isArray(data.predictions)) throw new Error("no predictions");
+        return data.predictions;
+      }
+
+      // 1) Proxy
+      try {
+        const res = await fetch(
+          `${NOAA_HILO_PROXY}?` +
+            new URLSearchParams({
+              station: stationId,
+              begin,
+              end: endStr,
+            }).toString()
+        );
+        return await parsePredictions(res);
+      } catch (_) {}
+
+      // 2) Direct (may 403 in some environments)
+      const res = await fetch(
+        `${NOAA_HILO_DIRECT}?` +
+          new URLSearchParams({
+            product: "predictions",
+            application: "supermoon-app",
+            begin_date: begin,
+            end_date: endStr,
+            datum: "MLLW",
+            station: stationId,
+            time_zone: "gmt",
+            units: "english",
+            interval: "hilo",
+            format: "json",
+          }).toString()
+      );
+      return parsePredictions(res);
     }
 
     function nextExtremes(predictions, when) {
@@ -890,54 +943,86 @@
       return name || st.id || "—";
     }
 
+    function paintTideFields({ station, title, high, low }, seq) {
+      if (seq !== tideSeq) return;
+      if (station != null) {
+        el.station.textContent = station;
+        if (title != null) el.station.title = title;
+      }
+      if (high != null) el.htide.textContent = high;
+      if (low != null) el.ltide.textContent = low;
+    }
+
     /** Nearest coastal NOAA station → name + next high/low. */
-    async function updateTides(lat, lon, when) {
+    async function updateTidesNow(lat, lon, when) {
       const seq = ++tideSeq;
       if (!Number.isFinite(lat) || !Number.isFinite(lon) || !(when instanceof Date)) {
-        el.station.textContent = "—";
-        el.htide.textContent = "—";
-        el.ltide.textContent = "—";
+        paintTideFields({ station: "—", high: "—", low: "—" }, seq);
         return;
       }
-      el.station.textContent = "…";
-      el.htide.textContent = "…";
-      el.ltide.textContent = "…";
 
-      let place = "";
+      // Keep previous station visible while refreshing (no flash to … / —)
+      if (!lastTideStationLabel) {
+        paintTideFields({ station: "…", high: "…", low: "…" }, seq);
+      } else {
+        paintTideFields({ high: "…", low: "…" }, seq);
+      }
+
       try {
         const list = await loadTideStations();
         if (seq !== tideSeq) return;
         const near = nearestTideStation(list, lat, lon);
         if (!near?.station) {
-          el.station.textContent = "—";
-          el.htide.textContent = "—";
-          el.ltide.textContent = "—";
+          // Only clear if we never had a good label
+          if (!lastTideStationLabel) {
+            paintTideFields({ station: "—", high: "—", low: "—" }, seq);
+          } else {
+            paintTideFields({ high: "—", low: "—" }, seq);
+          }
           return;
         }
-        place = formatTideStationLabel(near.station);
-        el.station.textContent = place;
-        el.station.title = `${place} · ${Math.round(near.km)} km away`;
+        const place = formatTideStationLabel(near.station);
+        lastTideStationLabel = place;
+        paintTideFields(
+          {
+            station: place,
+            title: `${place} · ${Math.round(near.km)} km away`,
+          },
+          seq
+        );
 
         try {
           const preds = await fetchHiloPredictions(near.station.id, when);
           if (seq !== tideSeq) return;
           const { nextH, nextL } = nextExtremes(preds, when);
-          el.htide.textContent = fmtTime(nextH);
-          el.ltide.textContent = fmtTime(nextL);
+          paintTideFields(
+            { high: fmtTime(nextH), low: fmtTime(nextL) },
+            seq
+          );
         } catch (_) {
-          // Keep station name even if hi/lo request fails
-          if (seq === tideSeq) {
-            el.htide.textContent = "—";
-            el.ltide.textContent = "—";
-          }
+          paintTideFields({ high: "—", low: "—" }, seq);
         }
       } catch (_) {
-        if (seq === tideSeq) {
-          if (!place) el.station.textContent = "—";
-          el.htide.textContent = "—";
-          el.ltide.textContent = "—";
+        if (seq !== tideSeq) return;
+        if (!lastTideStationLabel) {
+          paintTideFields({ station: "—", high: "—", low: "—" }, seq);
+        } else {
+          // Keep last good station; only times fail
+          paintTideFields(
+            { station: lastTideStationLabel, high: "—", low: "—" },
+            seq
+          );
         }
       }
+    }
+
+    /** Debounce: goLive/onPhase often fire twice back-to-back */
+    function updateTides(lat, lon, when) {
+      if (tideTimer) clearTimeout(tideTimer);
+      tideTimer = setTimeout(() => {
+        tideTimer = 0;
+        updateTidesNow(lat, lon, when);
+      }, 80);
     }
 
     function saveLoc(lat, lon, source) {
@@ -1104,7 +1189,7 @@
       if (previewMode) {
         cycleDate.innerHTML = `${fmtDateTime(m.when)}<span class="live-tag">Preview</span>`;
       } else {
-        cycleDate.innerHTML = `${fmtDateTime(m.when)}<span class="live-tag">Live · v81</span>`;
+        cycleDate.innerHTML = `${fmtDateTime(m.when)}<span class="live-tag">Live · v82</span>`;
       }
 
       // Always nearest NOAA prediction station for observer lat/lon
