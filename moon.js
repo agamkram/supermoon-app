@@ -311,6 +311,11 @@ export function createMoonGlobe(canvas, options = {}) {
 
     const lib = A.Libration(time);
     const southern = orientLocked ? frozenSouthern : observerLat < 0;
+    // Local sky roll (parallactic): how the disk sits for this lat/lon/time.
+    // Asheville vs Seattle (etc.) re-orients the globe; phase stays global.
+    const skyRoll = orientLocked
+      ? frozenRoll
+      : skyRollRad(observerLat, observerLon, when);
 
     if (mesh) {
       mesh.rotation.order = "YXZ";
@@ -318,12 +323,12 @@ export function createMoonGlobe(canvas, options = {}) {
       mesh.rotation.x = -lib.elat * A.DEG2RAD;
       mesh.rotation.z = 0;
     }
-    const zRot = southern ? Math.PI : 0;
-    moonGroup.rotation.set(0, 0, zRot);
+    // Screen roll only — do not double-apply a crude N/S π flip on top of skyRoll
+    moonGroup.rotation.set(0, 0, skyRoll);
     moonGroup.position.copy(target);
     const viewZ = new THREE.Vector3(0, 0, 1);
-    key.position.sub(target).applyAxisAngle(viewZ, zRot).add(target);
-    earthshine.position.sub(target).applyAxisAngle(viewZ, zRot).add(target);
+    key.position.sub(target).applyAxisAngle(viewZ, skyRoll).add(target);
+    earthshine.position.sub(target).applyAxisAngle(viewZ, skyRoll).add(target);
 
     lastPhaseInfo = {
       phase01,
@@ -335,6 +340,7 @@ export function createMoonGlobe(canvas, options = {}) {
       elon: lib.elon,
       elat: lib.elat,
       southern,
+      skyRoll,
       orientLocked,
     };
     if (typeof onPhase === "function") onPhase(lastPhaseInfo);

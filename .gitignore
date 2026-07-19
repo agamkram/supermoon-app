@@ -4,3 +4,6 @@
 .vercel
 orient-compare.png
 orient-compare-mirror.png
+
+.local-cert.pem
+.local-key.pem
