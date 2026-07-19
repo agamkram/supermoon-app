@@ -465,12 +465,26 @@ export function createMoonGlobe(canvas, options = {}) {
     key.target.position.copy(target);
   }
 
+  /** Extra home lift above safe-band center (CSS px for 0.25in). */
+  function homeExtraUpPx() {
+    let px = 24; // 0.25in @ 96dpi fallback
+    if (typeof document !== "undefined") {
+      const probe = document.createElement("div");
+      probe.style.cssText =
+        "position:absolute;visibility:hidden;pointer-events:none;width:0;height:0.25in";
+      document.body.appendChild(probe);
+      px = probe.offsetHeight || px;
+      probe.remove();
+    }
+    return px;
+  }
+
   /** CSS Y so home moon sits in the upper safe band (above bottom info), not mid-screen. */
   function homeScreenOffsetY() {
     const pads = readHomePadsPx();
     // Safe-band center is above the viewport center when bottom pad > top pad.
-    // CSS translateY: negative = content moves up.
-    return (pads.top - pads.bottom) / 2;
+    // CSS translateY: negative = content moves up. Extra 1/4" on startup.
+    return (pads.top - pads.bottom) / 2 - homeExtraUpPx();
   }
 
   function applyHomeFraming() {
@@ -569,8 +583,7 @@ export function createMoonGlobe(canvas, options = {}) {
     height = h;
     // Base pan buffer for 2fs. Also must cover home CSS lift (moon sits high so
     // bottom of host stays filled — otherwise a black strip clips the moon).
-    const pads = readHomePadsPx();
-    const homeLift = Math.abs(pads.top - pads.bottom) / 2;
+    const homeLift = Math.abs(homeScreenOffsetY());
     panMarginPx = Math.max(
       Math.ceil(Math.max(w, h) * PAN_MARGIN),
       Math.ceil(homeLift + 48)
