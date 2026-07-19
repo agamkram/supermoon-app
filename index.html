@@ -511,29 +511,7 @@
       color: #a02020;
     }
 
-    .red-badge {
-      position: fixed;
-      z-index: 20;
-      top: max(0.35rem, env(safe-area-inset-top));
-      right: max(0.4rem, env(safe-area-inset-right));
-      border: 1px solid #3a0c0c;
-      border-radius: 999px;
-      background: rgba(8, 0, 0, 0.9);
-      color: #7a1818;
-      font-family: "DM Sans", system-ui, sans-serif;
-      font-size: 8px;
-      font-weight: 600;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      padding: 0.22rem 0.5rem;
-      cursor: pointer;
-      pointer-events: auto;
-      touch-action: manipulation;
-    }
 
-    .red-badge[hidden] {
-      display: none !important;
-    }
   </style>
   <script type="importmap">
   {
@@ -554,17 +532,6 @@
     </div>
     <div id="touch-plane" aria-hidden="true"></div>
   </div>
-
-  <button
-    type="button"
-    id="red-badge"
-    class="red-badge"
-    hidden
-    title="Exit night vision"
-    aria-label="Night vision on. Tap to exit."
-  >
-    Night red · tap to exit
-  </button>
 
   <header class="chrome">
     <h1 class="app-title">SuperMoon</h1>
@@ -679,7 +646,7 @@
 
   <script src="astronomy.js"></script>
   <script type="module">
-    import { createMoonGlobe } from "./moon.js?v=79";
+    import { createMoonGlobe } from "./moon.js?v=80";
 
     const STORAGE_KEY = "moon-globe-loc-v1";
     const TIDE_STATIONS_KEY = "supermoon-noaa-tide-stations-v4";
@@ -1120,7 +1087,7 @@
       if (previewMode) {
         cycleDate.innerHTML = `${fmtDateTime(m.when)}<span class="live-tag">Preview</span>`;
       } else {
-        cycleDate.innerHTML = `${fmtDateTime(m.when)}<span class="live-tag">Live · v79</span>`;
+        cycleDate.innerHTML = `${fmtDateTime(m.when)}<span class="live-tag">Live · v80</span>`;
       }
 
       // Always nearest NOAA prediction station for observer lat/lon
@@ -1184,25 +1151,16 @@
         : livePhase01(sliderAnchorDate);
     }
 
-    const redBadge = document.getElementById("red-badge");
     let redModeOn = false;
 
     function setRedMode(on) {
       redModeOn = !!on;
       document.body.classList.toggle("is-red-mode", redModeOn);
-      redBadge.hidden = !redModeOn;
-      redBadge.setAttribute("aria-pressed", redModeOn ? "true" : "false");
     }
 
     function toggleRedMode() {
       setRedMode(!redModeOn);
     }
-
-    redBadge.addEventListener("click", (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      setRedMode(false);
-    });
 
     window.addEventListener("keydown", (e) => {
       if (e.key === "Escape" && redModeOn) setRedMode(false);
