@@ -70,7 +70,7 @@ export function createMoonGlobe(canvas, options = {}) {
     canvas;
 
   const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(40, 1, 0.05, 80);
+  const camera = new THREE.PerspectiveCamera(40, 1, 0.01, 80);
   camera.position.set(0, 0, 3.2);
 
   const renderer = new THREE.WebGLRenderer({
@@ -436,6 +436,12 @@ export function createMoonGlobe(canvas, options = {}) {
     camera.position.copy(target).add(_offset);
     camera.up.set(0, 1, 0);
     camera.lookAt(target);
+    // Near plane must sit *inside* the gap (dist − radius). Default 0.05 was
+    // clipping the front of the moon when zoomed in → hard L/R “edges”.
+    const dist = spherical.radius;
+    camera.near = Math.max(0.001, dist - RADIUS * 0.98);
+    camera.far = Math.max(80, dist + 40);
+    camera.updateProjectionMatrix();
   }
 
   function camDist() {
@@ -535,14 +541,12 @@ export function createMoonGlobe(canvas, options = {}) {
 
   function resetView() {
     camera.fov = 40;
-    camera.near = 0.05;
     camera.far = 80;
-    camera.updateProjectionMatrix();
     homeDist = computeHomeDistance(
       width || window.innerWidth,
       height || window.innerHeight
     );
-    applyHomeFraming();
+    applyHomeFraming(); // sets near/far via writeCamera
   }
 
   // —— Touch + pointer: 2fs pans the canvas (CSS) so movement is always visible ——
