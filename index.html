@@ -537,10 +537,13 @@
 
   <script src="astronomy.js"></script>
   <script type="module">
-    import { createMoonGlobe } from "./moon.js?v=75";
+    import { createMoonGlobe } from "./moon.js?v=76";
 
     const STORAGE_KEY = "moon-globe-loc-v1";
-    const TIDE_STATIONS_KEY = "supermoon-noaa-tide-stations-v3";
+    const TIDE_STATIONS_KEY = "supermoon-noaa-tide-stations-v4";
+    /** Name tokens that mark inland / river gauges — drop from nearest pick */
+    const INLAND_STATION_RE =
+      /\b(creek|bayou|slough|plantation|drawbridge|highway bridge|railroad bridge|mi\.?\s*above|miles?\s+above|above\s+(entrance|mouth)|ferry landing)\b/i;
     const SYNODIC = 29.530588853;
     const MOON_RADIUS_KM = 1737.4;
     const MI_PER_KM = 0.621371;
@@ -655,13 +658,16 @@
         const res = await fetch(NOAA_STATIONS_URL);
         if (!res.ok) throw new Error("stations fetch failed");
         const data = await res.json();
+        // type R = NOAA reference (primary) stations — harbors/coast, not creek subordinates
         const list = (data.stations || [])
           .filter(
             (s) =>
               s &&
               s.id &&
+              s.type === "R" &&
               Number.isFinite(Number(s.lat)) &&
-              Number.isFinite(Number(s.lng))
+              Number.isFinite(Number(s.lng)) &&
+              !INLAND_STATION_RE.test(String(s.name || ""))
           )
           .map((s) => ({
             id: String(s.id),
@@ -972,7 +978,7 @@
       if (previewMode) {
         cycleDate.innerHTML = `${fmtDateTime(m.when)}<span class="live-tag">Preview</span>`;
       } else {
-        cycleDate.innerHTML = `${fmtDateTime(m.when)}<span class="live-tag">Live · v75</span>`;
+        cycleDate.innerHTML = `${fmtDateTime(m.when)}<span class="live-tag">Live · v76</span>`;
       }
 
       // Always nearest NOAA prediction station for observer lat/lon
