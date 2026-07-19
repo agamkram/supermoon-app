@@ -13,6 +13,10 @@ const MAX_PAN = RADIUS * 20;
 const PINCH_POWER = 0.4;
 const PINCH_EPS = 0.005;
 const WHEEL_DOLLY = 0.0012;
+/** Base vertical FOV (degrees). Buffer render expands FOV so center crop matches this. */
+const BASE_FOV = 40;
+/** Extra screenfuls of canvas around the viewport so CSS 2fs pan never shows edges. */
+const PAN_MARGIN = 1;
 
 const NEAR_SIDE_Y = -Math.PI / 2;
 
@@ -95,8 +99,11 @@ export function createMoonGlobe(canvas, options = {}) {
   let hqStarted = false;
   let disposed = false;
   let animId = 0;
-  let width = 0;
+  let width = 0; // CSS viewport width (window)
   let height = 0;
+  let bufferW = 0; // drawing buffer / canvas CSS (includes pan margin)
+  let bufferH = 0;
+  let panMarginPx = 0;
   let homeDist = 3.2;
 
   const LIGHTING = {
@@ -409,7 +416,8 @@ export function createMoonGlobe(canvas, options = {}) {
     const pads = readHomePadsPx();
     const availH = Math.max(160, h - pads.top - pads.bottom);
     const availW = Math.max(160, w - 24);
-    const vFov = THREE.MathUtils.degToRad(camera.fov);
+    // Always size home against the *viewport* FOV (BASE_FOV), not the buffer FOV
+    const vFov = THREE.MathUtils.degToRad(BASE_FOV);
     const aspect = Math.max(w, 1) / Math.max(h, 1);
     const hFov = 2 * Math.atan(Math.tan(vFov / 2) * aspect);
     const fit = HOME_FILL;
@@ -481,26 +489,33 @@ export function createMoonGlobe(canvas, options = {}) {
   }
 
   /**
-   * 2fs pan — CSS translate of the canvas (proven on phone) + matching 3D pivot.
-   * Host is 200vw×200vh black so sliding does not show side edges.
+   * 2fs pan — CSS translate (works on phone) within a larger GL buffer so
+   * sliding never reveals empty L/R “edges”.
    */
   let screenPanX = 0;
   let screenPanY = 0;
+
+  function applyCanvasPanTransform() {
+    // Canvas is already offset by -panMarginPx so viewport shows the center.
+    // User pan is added on top; clamp so we stay inside the buffer.
+    const x = THREE.MathUtils.clamp(screenPanX, -panMarginPx, panMarginPx);
+    const y = THREE.MathUtils.clamp(screenPanY, -panMarginPx, panMarginPx);
+    screenPanX = x;
+    screenPanY = y;
+    canvas.style.transform = `translate(${x}px, ${y}px)`;
+  }
 
   function panCamera(dxPx, dyPx) {
     if (Math.abs(dxPx) < 0.5 && Math.abs(dyPx) < 0.5) return;
 
     screenPanX += dxPx;
     screenPanY += dyPx;
-    const cap = Math.max(window.innerWidth || 400, window.innerHeight || 400);
-    screenPanX = THREE.MathUtils.clamp(screenPanX, -cap, cap);
-    screenPanY = THREE.MathUtils.clamp(screenPanY, -cap, cap);
-    // Center of oversized host is at 50vw/50vh offset; keep pan relative to that
-    canvas.style.transform = `translate(${screenPanX}px, ${screenPanY}px)`;
+    applyCanvasPanTransform();
 
+    // Keep 3D pivot in sync with the slide
     camera.updateMatrixWorld(true);
     const dist = Math.max(camDist(), MIN_DIST);
-    const vFov = THREE.MathUtils.degToRad(camera.fov);
+    const vFov = THREE.MathUtils.degToRad(BASE_FOV);
     const h = Math.max(height || window.innerHeight || 1, 1);
     const worldPerPx = (2.2 * dist * Math.tan(vFov / 2)) / h;
     _right.set(1, 0, 0).applyQuaternion(camera.quaternion).normalize();
@@ -524,13 +539,13 @@ export function createMoonGlobe(canvas, options = {}) {
   function clearScreenPan() {
     screenPanX = 0;
     screenPanY = 0;
-    canvas.style.transform = "";
+    applyCanvasPanTransform();
   }
 
   function resize(cssW, cssH) {
     const w = Math.max(1, Math.round(cssW));
     const h = Math.max(1, Math.round(cssH));
-    if (w === width && h === height) return;
+    if (w === width && h === height && bufferW > 0) return;
 
     const prevHome = homeDist;
     const dist = camDist();
@@ -539,12 +554,29 @@ export function createMoonGlobe(canvas, options = {}) {
 
     width = w;
     height = h;
-    canvas.style.width = `${w}px`;
-    canvas.style.height = `${h}px`;
-    camera.aspect = w / h;
+    panMarginPx = Math.ceil(Math.max(w, h) * PAN_MARGIN);
+    bufferW = w + 2 * panMarginPx;
+    bufferH = h + 2 * panMarginPx;
+
+    // Wider FOV on the large buffer so the *center* w×h crop matches BASE_FOV
+    const baseFovRad = THREE.MathUtils.degToRad(BASE_FOV);
+    camera.fov =
+      (2 *
+        Math.atan(Math.tan(baseFovRad / 2) * (bufferH / h)) *
+        180) /
+      Math.PI;
+    camera.aspect = bufferW / bufferH;
     camera.updateProjectionMatrix();
+
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2.5));
-    renderer.setSize(w, h, false);
+    renderer.setSize(bufferW, bufferH, false);
+
+    canvas.style.position = "absolute";
+    canvas.style.width = `${bufferW}px`;
+    canvas.style.height = `${bufferH}px`;
+    canvas.style.left = `${-panMarginPx}px`;
+    canvas.style.top = `${-panMarginPx}px`;
+    applyCanvasPanTransform();
 
     homeDist = computeHomeDistance(w, h);
     if (atHome) applyHomeFraming();
@@ -558,13 +590,12 @@ export function createMoonGlobe(canvas, options = {}) {
   }
 
   function resetView() {
-    camera.fov = 40;
     camera.far = 80;
     homeDist = computeHomeDistance(
       width || window.innerWidth,
       height || window.innerHeight
     );
-    applyHomeFraming(); // sets near/far via writeCamera
+    applyHomeFraming();
   }
 
   // —— Touch + pointer: 2fs pans the canvas (CSS) so movement is always visible ——
