@@ -430,16 +430,7 @@
       cursor: pointer;
     }
 
-    .slider-ends {
-      display: flex;
-      justify-content: space-between;
-      font-size: 7.5px;
-      color: var(--faint);
-      text-transform: uppercase;
-      letter-spacing: 0.04em;
-      line-height: 1;
-      margin-top: 1px;
-    }
+
 
     .status {
       position: fixed;
@@ -698,17 +689,12 @@
           aria-label="Scrub through one full lunar cycle"
         />
       </div>
-      <div class="slider-ends">
-        <span>New</span>
-        <span id="slider-ends-mid">—</span>
-        <span>New</span>
-      </div>
     </div>
   </div>
 
   <script src="astronomy.js"></script>
   <script type="module">
-    import { createMoonGlobe } from "./moon.js?v=84";
+    import { createMoonGlobe } from "./moon.js?v=85";
 
     const STORAGE_KEY = "moon-globe-loc-v1";
     const TIDE_STATIONS_KEY = "supermoon-noaa-tide-stations-v5";
@@ -739,7 +725,6 @@
     const applyBtn = document.getElementById("apply-loc");
     const phaseSlider = document.getElementById("phase-slider");
     const cycleDate = document.getElementById("cycle-date");
-    const sliderEndsMid = document.getElementById("slider-ends-mid");
     const liveBtn = document.getElementById("live-btn");
     const hemiN = document.getElementById("hemi-n");
     const hemiS = document.getElementById("hemi-s");
@@ -1245,13 +1230,10 @@
       el.rise.textContent = fmtTime(m.rise);
       el.set.textContent = fmtTime(m.set);
 
-      const dayStr = m.cycleDay.toFixed(1);
-      sliderEndsMid.textContent = `day ${dayStr} / ${SYNODIC.toFixed(1)}`;
-
       if (previewMode) {
         cycleDate.innerHTML = `${fmtDateTime(m.when)}<span class="live-tag">Preview</span>`;
       } else {
-        cycleDate.innerHTML = `${fmtDateTime(m.when)}<span class="live-tag">Live · v84</span>`;
+        cycleDate.innerHTML = `${fmtDateTime(m.when)}<span class="live-tag">Live · v85</span>`;
       }
 
       // Always nearest NOAA prediction station for observer lat/lon
