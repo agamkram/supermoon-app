@@ -156,49 +156,43 @@
       touch-action: manipulation;
     }
 
+    /* Uniform metric row height (match phase row) */
+    :root {
+      --m-row-h: 2.2rem;
+    }
+
     .m-grid {
       display: grid;
       grid-template-columns: 1.2fr 0.85fr 1fr 0.9fr;
+      grid-auto-rows: var(--m-row-h);
       gap: 2px;
       pointer-events: none;
     }
 
     .m-grid-3 {
       grid-template-columns: 1.35fr 0.9fr 0.9fr;
+      grid-auto-rows: var(--m-row-h);
     }
 
-    /* Rise / set compact; remaining slot = night vision toggle */
+    /* Rise / set + night vision toggle */
     .m-grid-rise {
       grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(3.6rem, 0.75fr);
+      grid-auto-rows: var(--m-row-h);
       align-items: stretch;
-    }
-
-    .m-grid-rise .m-cell {
-      padding: 1px 4px 2px;
-    }
-
-    .m-grid-rise .m-cell .k {
-      font-size: 6.5px;
-      line-height: 1;
-    }
-
-    .m-grid-rise .m-cell .v {
-      font-size: 11px;
-      line-height: 1.05;
     }
 
     #m-station {
       font-size: 10px;
-      line-height: 1.15;
-      white-space: normal;
-      overflow: visible;
-      word-break: break-word;
+      line-height: 1.1;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
     .m-cell-vision {
       justify-content: center;
       align-items: stretch;
-      padding: 1px !important;
+      padding: 2px !important;
     }
 
     .vision-btn {
@@ -234,11 +228,16 @@
       background: var(--cell);
       border: 1px solid var(--line);
       border-radius: 6px;
-      padding: 2px 4px 3px;
+      padding: 2px 5px 3px;
       min-width: 0;
+      min-height: var(--m-row-h);
+      height: var(--m-row-h);
+      box-sizing: border-box;
       display: flex;
       flex-direction: column;
-      gap: 0;
+      justify-content: center;
+      gap: 1px;
+      overflow: hidden;
     }
 
     .m-cell .k {
@@ -247,7 +246,8 @@
       letter-spacing: 0.04em;
       text-transform: uppercase;
       color: var(--dim);
-      line-height: 1.1;
+      line-height: 1.05;
+      flex: 0 0 auto;
     }
 
     .m-cell .v {
@@ -257,7 +257,10 @@
       letter-spacing: -0.02em;
       line-height: 1.1;
       color: var(--text);
-      white-space: normal;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      flex: 0 0 auto;
     }
 
     .m-cell .v.sm { font-size: 11px; }
@@ -271,6 +274,7 @@
       display: grid;
       grid-template-columns: 1fr 1fr;
       gap: 2px;
+      min-height: var(--m-row-h);
     }
 
     .loc-card {
@@ -280,8 +284,11 @@
       background: var(--cell);
       border: 1px solid var(--line);
       border-radius: 6px;
-      padding: 0.1rem 0.22rem;
+      padding: 0 0.22rem;
       min-width: 0;
+      min-height: var(--m-row-h);
+      height: var(--m-row-h);
+      box-sizing: border-box;
     }
 
     .loc-card.hemi-card { justify-content: center; gap: 0.15rem; }
@@ -717,20 +724,7 @@
         <div class="v sm" id="m-vsmax">—</div>
       </div>
     </div>
-    <div class="m-grid m-grid-3" aria-label="Tides">
-      <div class="m-cell">
-        <div class="k">Tide station</div>
-        <div class="v sm" id="m-station">—</div>
-      </div>
-      <div class="m-cell">
-        <div class="k">High tide</div>
-        <div class="v sm" id="m-htide">—</div>
-      </div>
-      <div class="m-cell">
-        <div class="k">Low tide</div>
-        <div class="v sm" id="m-ltide">—</div>
-      </div>
-    </div>
+    <!-- Row order: metrics 1–2, rise/set/red, tides, location -->
     <div class="m-grid m-grid-rise" aria-label="Moon rise set and display mode">
       <div class="m-cell">
         <div class="k">Moonrise</div>
@@ -750,6 +744,20 @@
         >
           Red
         </button>
+      </div>
+    </div>
+    <div class="m-grid m-grid-3" aria-label="Tides">
+      <div class="m-cell">
+        <div class="k">Tide station</div>
+        <div class="v sm" id="m-station">—</div>
+      </div>
+      <div class="m-cell">
+        <div class="k">High tide</div>
+        <div class="v sm" id="m-htide">—</div>
+      </div>
+      <div class="m-cell">
+        <div class="k">Low tide</div>
+        <div class="v sm" id="m-ltide">—</div>
       </div>
     </div>
 
@@ -808,7 +816,7 @@
   <script src="astronomy.js"></script>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
   <script type="module">
-    import { createMoonGlobe } from "./moon.js?v=87";
+    import { createMoonGlobe } from "./moon.js?v=88";
 
     const STORAGE_KEY = "moon-globe-loc-v1";
     const TIDE_STATIONS_KEY = "supermoon-noaa-tide-stations-v5";
@@ -1357,7 +1365,7 @@
       if (previewMode) {
         cycleDate.innerHTML = `${fmtDateTime(m.when)}<span class="live-tag">Preview</span>`;
       } else {
-        cycleDate.innerHTML = `${fmtDateTime(m.when)}<span class="live-tag">Live · v87</span>`;
+        cycleDate.innerHTML = `${fmtDateTime(m.when)}<span class="live-tag">Live · v88</span>`;
       }
 
       // Always nearest NOAA prediction station for observer lat/lon
