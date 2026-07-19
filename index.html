@@ -513,14 +513,17 @@
 
   <script src="astronomy.js"></script>
   <script type="module">
-    import { createMoonGlobe } from "./moon.js?v=71";
+    import { createMoonGlobe } from "./moon.js?v=72";
 
     const STORAGE_KEY = "moon-globe-loc-v1";
+    const TIDE_STATIONS_KEY = "supermoon-noaa-tide-stations-v1";
     const SYNODIC = 29.530588853;
     const MOON_RADIUS_KM = 1737.4;
     const MI_PER_KM = 0.621371;
     /** Mean full-moon angular diameter (arcmin) — classic ~31′ */
     const AVG_ANG_ARCMIN = 31.07;
+    const NOAA_STATIONS_URL =
+      "https://api.tidesandcurrents.noaa.gov/mdapi/prod/webapi/stations.json?type=tidepredictions";
 
     const canvas = document.getElementById("moon-canvas");
     const status = document.getElementById("status");
@@ -558,6 +561,9 @@
     let sliderAnchorPhase = 0;
     let previewRaf = 0;
     let metricsRaf = 0;
+    let tideSeq = 0;
+    /** @type {Promise<Array<{id:string,lat:number,lng:number}>> | null} */
+    let stationsPromise = null;
     /** @type {{ yr: number, maxAng: number } | null} */
     let yearMaxCache = null;
 
@@ -582,6 +588,175 @@
       const mon = date.toLocaleString(undefined, { month: "short" });
       const day = date.getDate();
       return `${mon} ${day} · ${fmtTime(date)}`;
+    }
+
+    function ymdCompact(d) {
+      const y = d.getUTCFullYear();
+      const m = String(d.getUTCMonth() + 1).padStart(2, "0");
+      const day = String(d.getUTCDate()).padStart(2, "0");
+      return `${y}${m}${day}`;
+    }
+
+    function haversineKm(lat1, lon1, lat2, lon2) {
+      const R = 6371;
+      const p1 = (lat1 * Math.PI) / 180;
+      const p2 = (lat2 * Math.PI) / 180;
+      const dp = ((lat2 - lat1) * Math.PI) / 180;
+      const dl = ((lon2 - lon1) * Math.PI) / 180;
+      const a =
+        Math.sin(dp / 2) ** 2 +
+        Math.cos(p1) * Math.cos(p2) * Math.sin(dl / 2) ** 2;
+      return 2 * R * Math.asin(Math.min(1, Math.sqrt(a)));
+    }
+
+    function loadTideStations() {
+      if (stationsPromise) return stationsPromise;
+      stationsPromise = (async () => {
+        try {
+          const raw = localStorage.getItem(TIDE_STATIONS_KEY);
+          if (raw) {
+            const o = JSON.parse(raw);
+            if (
+              o?.ts &&
+              Date.now() - o.ts < 7 * 86400000 &&
+              Array.isArray(o.list) &&
+              o.list.length > 100
+            ) {
+              return o.list;
+            }
+          }
+        } catch (_) {}
+
+        const res = await fetch(NOAA_STATIONS_URL);
+        if (!res.ok) throw new Error("stations fetch failed");
+        const data = await res.json();
+        const list = (data.stations || [])
+          .filter(
+            (s) =>
+              s &&
+              s.id &&
+              Number.isFinite(Number(s.lat)) &&
+              Number.isFinite(Number(s.lng))
+          )
+          .map((s) => ({
+            id: String(s.id),
+            lat: Number(s.lat),
+            lng: Number(s.lng),
+          }));
+        try {
+          localStorage.setItem(
+            TIDE_STATIONS_KEY,
+            JSON.stringify({ ts: Date.now(), list })
+          );
+        } catch (_) {
+          /* quota — in-memory only this session */
+        }
+        return list;
+      })().catch((err) => {
+        stationsPromise = null;
+        throw err;
+      });
+      return stationsPromise;
+    }
+
+    function nearestTideStation(list, lat, lon) {
+      let best = null;
+      let bestD = Infinity;
+      for (let i = 0; i < list.length; i++) {
+        const s = list[i];
+        const d = haversineKm(lat, lon, s.lat, s.lng);
+        if (d < bestD) {
+          bestD = d;
+          best = s;
+        }
+      }
+      return best ? { station: best, km: bestD } : null;
+    }
+
+    function parseNoaaGmt(t) {
+      // "2026-07-19 00:36" as UTC when time_zone=gmt
+      if (!t || typeof t !== "string") return null;
+      const d = new Date(t.replace(" ", "T") + "Z");
+      return Number.isNaN(d.getTime()) ? null : d;
+    }
+
+    async function fetchHiloPredictions(stationId, when) {
+      const start = new Date(when.getTime() - 6 * 3600000);
+      const end = new Date(when.getTime() + 48 * 3600000);
+      const url =
+        "https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?" +
+        new URLSearchParams({
+          product: "predictions",
+          application: "supermoon-app",
+          begin_date: ymdCompact(start),
+          end_date: ymdCompact(end),
+          datum: "MLLW",
+          station: stationId,
+          time_zone: "gmt",
+          units: "english",
+          interval: "hilo",
+          format: "json",
+        }).toString();
+      const res = await fetch(url);
+      if (!res.ok) throw new Error("predictions failed");
+      const data = await res.json();
+      if (data?.error?.message) throw new Error(data.error.message);
+      return Array.isArray(data.predictions) ? data.predictions : [];
+    }
+
+    function nextExtremes(predictions, when) {
+      let nextH = null;
+      let nextL = null;
+      const t0 = when.getTime();
+      for (const p of predictions) {
+        const dt = parseNoaaGmt(p.t);
+        if (!dt || dt.getTime() < t0 - 60000) continue;
+        if (p.type === "H" && !nextH) nextH = dt;
+        if (p.type === "L" && !nextL) nextL = dt;
+        if (nextH && nextL) break;
+      }
+      // if nothing after when, take first of each in the window
+      if (!nextH || !nextL) {
+        for (const p of predictions) {
+          const dt = parseNoaaGmt(p.t);
+          if (!dt) continue;
+          if (p.type === "H" && !nextH) nextH = dt;
+          if (p.type === "L" && !nextL) nextL = dt;
+        }
+      }
+      return { nextH, nextL };
+    }
+
+    /** Nearest NOAA tide-prediction station → next high/low times. */
+    async function updateTides(lat, lon, when) {
+      const seq = ++tideSeq;
+      if (!Number.isFinite(lat) || !Number.isFinite(lon) || !(when instanceof Date)) {
+        el.htide.textContent = "—";
+        el.ltide.textContent = "—";
+        return;
+      }
+      el.htide.textContent = "…";
+      el.ltide.textContent = "…";
+      try {
+        const list = await loadTideStations();
+        if (seq !== tideSeq) return;
+        const near = nearestTideStation(list, lat, lon);
+        if (!near?.station) {
+          el.htide.textContent = "—";
+          el.ltide.textContent = "—";
+          return;
+        }
+        const preds = await fetchHiloPredictions(near.station.id, when);
+        if (seq !== tideSeq) return;
+        const { nextH, nextL } = nextExtremes(preds, when);
+        el.htide.textContent = fmtTime(nextH);
+        el.ltide.textContent = fmtTime(nextL);
+      } catch (_) {
+        if (seq === tideSeq) {
+          el.htide.textContent = "—";
+          el.ltide.textContent = "—";
+        }
+      }
     }
 
     function saveLoc(lat, lon, source) {
@@ -739,8 +914,6 @@
       el.vsmax.textContent = Number.isFinite(m.vsMax)
         ? `${m.vsMax.toFixed(0)}% · yr`
         : "—";
-      el.htide.textContent = "—";
-      el.ltide.textContent = "—";
       el.rise.textContent = fmtTime(m.rise);
       el.set.textContent = fmtTime(m.set);
 
@@ -750,8 +923,11 @@
       if (previewMode) {
         cycleDate.innerHTML = `${fmtDateTime(m.when)}<span class="live-tag">Preview</span>`;
       } else {
-        cycleDate.innerHTML = `${fmtDateTime(m.when)}<span class="live-tag">Live · v71</span>`;
+        cycleDate.innerHTML = `${fmtDateTime(m.when)}<span class="live-tag">Live · v72</span>`;
       }
+
+      // Always nearest NOAA prediction station for observer lat/lon
+      updateTides(Number(info.lat), Number(info.lon), m.when);
     }
 
     function showPhase(info) {
