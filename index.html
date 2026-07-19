@@ -44,16 +44,10 @@
       inset: 0;
     }
 
-    /*
-     * Oversized host (black) so 2fs CSS pan can slide the canvas without
-     * revealing L/R page edges. Zoom still paints full-screen content.
-     */
+    /* Full screen; same black as GL clear so 2fs CSS pan shows no L/R edges */
     #moon-host {
       position: fixed;
-      left: -50vw;
-      top: -50vh;
-      width: 200vw;
-      height: 200vh;
+      inset: 0;
       z-index: 1;
       overflow: hidden;
       background: #020308;
