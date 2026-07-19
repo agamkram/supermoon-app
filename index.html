@@ -6,13 +6,16 @@
   <meta name="theme-color" content="#020308" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <meta name="apple-mobile-web-app-title" content="Super Moon" />
+  <meta name="apple-mobile-web-app-title" content="SuperMoon" />
   <meta name="description" content="Hi-res 3D Moon with live phase shading for your location." />
-  <title>Super Moon</title>
+  <title>SuperMoon</title>
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" type="image/png" href="apple-touch-icon.png" />
   <link rel="apple-touch-icon" href="apple-touch-icon.png" />
   <link rel="preload" href="moon-2k.jpg" as="image" type="image/jpeg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500&family=Michroma&display=swap" rel="stylesheet" />
   <link rel="preconnect" href="https://unpkg.com" crossorigin />
   <link rel="modulepreload" href="https://unpkg.com/three@0.160.0/build/three.module.js" />
   <style>
@@ -81,20 +84,31 @@
       left: 0;
       right: 0;
       top: 0;
+      height: calc(0.375in + env(safe-area-inset-top, 0px));
       padding:
-        max(0.55rem, env(safe-area-inset-top))
+        env(safe-area-inset-top, 0px)
         max(1rem, env(safe-area-inset-right))
         0
         max(1rem, env(safe-area-inset-left));
+      display: flex;
+      align-items: center;
+      justify-content: center;
       pointer-events: none;
       text-align: center;
     }
 
-    .phase-line {
+    /* Same title treatment as Solar Dashboard (Michroma) */
+    .app-title {
       margin: 0;
-      font-size: 0.88rem;
+      font-family: "Michroma", "DM Sans", system-ui, sans-serif;
+      font-weight: 400;
+      font-size: 0.22in;
+      letter-spacing: 0.1em;
+      line-height: 1.15;
       color: var(--text);
-      text-shadow: 0 1px 10px rgba(0, 0, 0, 0.65);
+      text-align: center;
+      text-transform: uppercase;
+      text-shadow: 0 1px 12px rgba(0, 0, 0, 0.55);
     }
 
     /* Compact temp chrome — full card redesign later */
@@ -290,7 +304,7 @@
   </div>
 
   <header class="chrome">
-    <p class="phase-line" id="phase-line">—</p>
+    <h1 class="app-title">SuperMoon</h1>
   </header>
 
   <p class="status" id="status" data-state="loading">Loading surface…</p>
@@ -333,13 +347,13 @@
 
   <script src="astronomy.js"></script>
   <script type="module">
-    import { createMoonGlobe } from "./moon.js?v=64";
+    import { createMoonGlobe } from "./moon.js?v=65";
 
     const STORAGE_KEY = "moon-globe-loc-v1";
     const SYNODIC = 29.530588853;
     const canvas = document.getElementById("moon-canvas");
     const status = document.getElementById("status");
-    const phaseLine = document.getElementById("phase-line");
+
     const latInput = document.getElementById("lat-input");
     const lonInput = document.getElementById("lon-input");
     const locMeta = document.getElementById("loc-meta");
@@ -400,10 +414,9 @@
 
     function showPhase(info) {
       if (!info) return;
-      const pct = (info.fraction * 100).toFixed(0);
-      const day = (info.phase01 * SYNODIC).toFixed(1);
-      phaseLine.textContent = `${info.name} · ${pct}% lit`;
+      // Phase name/illumination moves to bottom info assembly later
       if (previewMode) {
+        const day = (info.phase01 * SYNODIC).toFixed(1);
         sliderLabel.textContent = `Day ${day}/${SYNODIC.toFixed(1)}`;
       }
     }
