@@ -166,8 +166,10 @@
       grid-template-columns: 1.35fr 0.9fr 0.9fr;
     }
 
-    .m-grid-2 {
-      grid-template-columns: 1fr 1fr;
+    /* Rise / set compact; remaining slot = night vision toggle */
+    .m-grid-rise {
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(4.5rem, 0.85fr);
+      align-items: stretch;
     }
 
     #m-station {
@@ -176,6 +178,41 @@
       white-space: normal;
       overflow: visible;
       word-break: break-word;
+    }
+
+    .m-cell-vision {
+      justify-content: center;
+      align-items: stretch;
+      padding: 2px;
+    }
+
+    .vision-btn {
+      width: 100%;
+      height: 100%;
+      min-height: 2rem;
+      border: 1px solid var(--line);
+      border-radius: 3px;
+      background: rgba(255, 255, 255, 0.06);
+      color: var(--text);
+      font-family: "DM Sans", system-ui, sans-serif;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      cursor: pointer;
+      touch-action: manipulation;
+      line-height: 1.1;
+      padding: 0.25rem 0.35rem;
+    }
+
+    .vision-btn:hover {
+      background: rgba(255, 255, 255, 0.1);
+    }
+
+    body.is-red-mode .vision-btn {
+      background: rgba(70, 10, 10, 0.55);
+      border-color: #551010;
+      color: var(--text);
     }
 
     .m-cell {
@@ -527,7 +564,7 @@
     <div id="moon-host">
       <canvas
         id="moon-canvas"
-        aria-label="3D Moon. One finger rotates, pinch zooms, two-finger slide pans. Tap for red night mode. Live resets."
+        aria-label="3D Moon. One finger rotates, pinch zooms, two-finger slide pans. Live resets."
       ></canvas>
     </div>
     <div id="touch-plane" aria-hidden="true"></div>
@@ -588,7 +625,7 @@
         <div class="v sm" id="m-ltide">—</div>
       </div>
     </div>
-    <div class="m-grid m-grid-2" aria-label="Moon rise set">
+    <div class="m-grid m-grid-rise" aria-label="Moon rise set and display mode">
       <div class="m-cell">
         <div class="k">Moonrise</div>
         <div class="v sm" id="m-rise">—</div>
@@ -596,6 +633,17 @@
       <div class="m-cell">
         <div class="k">Moonset</div>
         <div class="v sm" id="m-set">—</div>
+      </div>
+      <div class="m-cell m-cell-vision">
+        <button
+          type="button"
+          class="vision-btn"
+          id="vision-btn"
+          title="Night vision: red display for dark-adapted eyes"
+          aria-pressed="false"
+        >
+          Red
+        </button>
       </div>
     </div>
 
@@ -646,7 +694,7 @@
 
   <script src="astronomy.js"></script>
   <script type="module">
-    import { createMoonGlobe } from "./moon.js?v=82";
+    import { createMoonGlobe } from "./moon.js?v=83";
 
     const STORAGE_KEY = "moon-globe-loc-v1";
     const TIDE_STATIONS_KEY = "supermoon-noaa-tide-stations-v5";
@@ -1189,7 +1237,7 @@
       if (previewMode) {
         cycleDate.innerHTML = `${fmtDateTime(m.when)}<span class="live-tag">Preview</span>`;
       } else {
-        cycleDate.innerHTML = `${fmtDateTime(m.when)}<span class="live-tag">Live · v82</span>`;
+        cycleDate.innerHTML = `${fmtDateTime(m.when)}<span class="live-tag">Live · v83</span>`;
       }
 
       // Always nearest NOAA prediction station for observer lat/lon
@@ -1254,15 +1302,27 @@
     }
 
     let redModeOn = false;
+    const visionBtn = document.getElementById("vision-btn");
 
     function setRedMode(on) {
       redModeOn = !!on;
       document.body.classList.toggle("is-red-mode", redModeOn);
+      // Label = what you get when you press (next action)
+      visionBtn.textContent = redModeOn ? "White" : "Red";
+      visionBtn.setAttribute("aria-pressed", redModeOn ? "true" : "false");
+      visionBtn.title = redModeOn
+        ? "Return to normal (white) display"
+        : "Night vision: red display for dark-adapted eyes";
     }
 
     function toggleRedMode() {
       setRedMode(!redModeOn);
     }
+
+    visionBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      toggleRedMode();
+    });
 
     window.addEventListener("keydown", (e) => {
       if (e.key === "Escape" && redModeOn) setRedMode(false);
@@ -1278,7 +1338,6 @@
         /* quality upgrades stay silent */
       },
       onPhase: showPhase,
-      onTap: toggleRedMode,
     });
 
     function applyLocation(lat, lon, source) {
