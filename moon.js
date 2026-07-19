@@ -489,10 +489,9 @@ export function createMoonGlobe(canvas, options = {}) {
   }
 
   function setCamDist(dist) {
-    const prev = camDist();
     dist = THREE.MathUtils.clamp(dist, MIN_DIST, Math.max(homeDist, MIN_DIST + 0.2));
-    // Un-zoom to max from a closer view → full home
-    if (dist >= homeDist - 1e-4 && prev < homeDist * 0.99) {
+    // Full un-zoom (max distance) → starting location + face-on orientation
+    if (dist >= homeDist - 1e-4) {
       applyHomeFraming();
       return;
     }
