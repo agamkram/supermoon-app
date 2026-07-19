@@ -853,7 +853,7 @@
   <script src="astronomy.js"></script>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
   <script type="module">
-    import { createMoonGlobe } from "./moon.js?v=88";
+    import { createMoonGlobe } from "./moon.js?v=89";
 
     const STORAGE_KEY = "moon-globe-loc-v1";
     const TIDE_STATIONS_KEY = "supermoon-noaa-tide-stations-v5";
@@ -1265,15 +1265,15 @@
       return (((A.MoonPhase(date) % 360) + 360) % 360) / 360;
     }
 
-    function phaseDelta(from, to) {
-      let d = to - from;
-      if (d > 0.5) d -= 1;
-      if (d < -0.5) d += 1;
-      return d;
-    }
-
+    /**
+     * Map slider phase → calendar date from the scrub anchor.
+     * Important: do NOT wrap delta into [-0.5, 0.5]. That created a one-month
+     * time jump when scrubbing past anchorPhase+0.5 (~cycle day ~15–20
+     * depending on live phase), which looked like a small libration “pop”.
+     * Continuous (target − anchor) keeps libration/lighting smooth along the bar.
+     */
     function dateFromPhaseOffset(anchorDate, anchorPhase, targetPhase) {
-      const delta = phaseDelta(anchorPhase, targetPhase);
+      const delta = targetPhase - anchorPhase;
       return new Date(anchorDate.getTime() + delta * SYNODIC * 86400000);
     }
 
@@ -1402,7 +1402,7 @@
       if (previewMode) {
         cycleDate.innerHTML = `${fmtDateTime(m.when)}<span class="live-tag">Preview</span>`;
       } else {
-        cycleDate.innerHTML = `${fmtDateTime(m.when)}<span class="live-tag">Live · v88</span>`;
+        cycleDate.innerHTML = `${fmtDateTime(m.when)}<span class="live-tag">Live · v89</span>`;
       }
 
       // Always nearest NOAA prediction station for observer lat/lon
