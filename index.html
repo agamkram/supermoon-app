@@ -168,8 +168,22 @@
 
     /* Rise / set compact; remaining slot = night vision toggle */
     .m-grid-rise {
-      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(4.5rem, 0.85fr);
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(3.6rem, 0.75fr);
       align-items: stretch;
+    }
+
+    .m-grid-rise .m-cell {
+      padding: 1px 4px 2px;
+    }
+
+    .m-grid-rise .m-cell .k {
+      font-size: 6.5px;
+      line-height: 1;
+    }
+
+    .m-grid-rise .m-cell .v {
+      font-size: 11px;
+      line-height: 1.05;
     }
 
     #m-station {
@@ -183,26 +197,26 @@
     .m-cell-vision {
       justify-content: center;
       align-items: stretch;
-      padding: 2px;
+      padding: 1px !important;
     }
 
     .vision-btn {
       width: 100%;
       height: 100%;
-      min-height: 2rem;
+      min-height: 0;
       border: 1px solid var(--line);
       border-radius: 3px;
       background: rgba(255, 255, 255, 0.06);
       color: var(--text);
       font-family: "DM Sans", system-ui, sans-serif;
-      font-size: 11px;
+      font-size: 9px;
       font-weight: 600;
-      letter-spacing: 0.06em;
+      letter-spacing: 0.05em;
       text-transform: uppercase;
       cursor: pointer;
       touch-action: manipulation;
-      line-height: 1.1;
-      padding: 0.25rem 0.35rem;
+      line-height: 1;
+      padding: 0.12rem 0.28rem;
     }
 
     .vision-btn:hover {
@@ -694,7 +708,7 @@
 
   <script src="astronomy.js"></script>
   <script type="module">
-    import { createMoonGlobe } from "./moon.js?v=83";
+    import { createMoonGlobe } from "./moon.js?v=84";
 
     const STORAGE_KEY = "moon-globe-loc-v1";
     const TIDE_STATIONS_KEY = "supermoon-noaa-tide-stations-v5";
@@ -1237,7 +1251,7 @@
       if (previewMode) {
         cycleDate.innerHTML = `${fmtDateTime(m.when)}<span class="live-tag">Preview</span>`;
       } else {
-        cycleDate.innerHTML = `${fmtDateTime(m.when)}<span class="live-tag">Live · v83</span>`;
+        cycleDate.innerHTML = `${fmtDateTime(m.when)}<span class="live-tag">Live · v84</span>`;
       }
 
       // Always nearest NOAA prediction station for observer lat/lon
