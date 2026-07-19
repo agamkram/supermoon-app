@@ -458,7 +458,7 @@ export function createMoonGlobe(canvas, options = {}) {
     target.set(0, 0, 0);
     camera.up.set(0, 1, 0);
     camera.position.set(0, 0, homeDist);
-    canvas.style.transform = "";
+    clearScreenPan();
     readSpherical();
     writeCamera();
     syncMoon();
@@ -481,17 +481,28 @@ export function createMoonGlobe(canvas, options = {}) {
   }
 
   /**
-   * 2fs pan: move camera + look-at + moon together (screen-space).
-   * (Earlier CSS canvas translate caused L/R “edges” when zoomed.)
+   * 2fs pan — CSS translate of the canvas (proven on phone) + matching 3D pivot.
+   * Host is 200vw×200vh black so sliding does not show side edges.
    */
+  let screenPanX = 0;
+  let screenPanY = 0;
+
   function panCamera(dxPx, dyPx) {
     if (Math.abs(dxPx) < 0.5 && Math.abs(dyPx) < 0.5) return;
+
+    screenPanX += dxPx;
+    screenPanY += dyPx;
+    const cap = Math.max(window.innerWidth || 400, window.innerHeight || 400);
+    screenPanX = THREE.MathUtils.clamp(screenPanX, -cap, cap);
+    screenPanY = THREE.MathUtils.clamp(screenPanY, -cap, cap);
+    // Center of oversized host is at 50vw/50vh offset; keep pan relative to that
+    canvas.style.transform = `translate(${screenPanX}px, ${screenPanY}px)`;
+
     camera.updateMatrixWorld(true);
     const dist = Math.max(camDist(), MIN_DIST);
     const vFov = THREE.MathUtils.degToRad(camera.fov);
     const h = Math.max(height || window.innerHeight || 1, 1);
-    // Slightly hot so phone slides feel 1:1 with the finger
-    const worldPerPx = (2.4 * dist * Math.tan(vFov / 2)) / h;
+    const worldPerPx = (2.2 * dist * Math.tan(vFov / 2)) / h;
     _right.set(1, 0, 0).applyQuaternion(camera.quaternion).normalize();
     _up.set(0, 1, 0).applyQuaternion(camera.quaternion).normalize();
     const sx = -dxPx * worldPerPx;
@@ -508,6 +519,12 @@ export function createMoonGlobe(canvas, options = {}) {
     }
     syncMoon();
     readSpherical();
+  }
+
+  function clearScreenPan() {
+    screenPanX = 0;
+    screenPanY = 0;
+    canvas.style.transform = "";
   }
 
   function resize(cssW, cssH) {

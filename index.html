@@ -44,12 +44,19 @@
       inset: 0;
     }
 
-    /* Full viewport — zoom can fill the whole screen (no top/bottom clip box) */
+    /*
+     * Oversized host (black) so 2fs CSS pan can slide the canvas without
+     * revealing L/R page edges. Zoom still paints full-screen content.
+     */
     #moon-host {
       position: fixed;
-      inset: 0;
+      left: -50vw;
+      top: -50vh;
+      width: 200vw;
+      height: 200vh;
       z-index: 1;
       overflow: hidden;
+      background: #020308;
     }
 
     /* Gesture layer above canvas, under real UI controls */
@@ -332,7 +339,7 @@
 
   <script src="astronomy.js"></script>
   <script type="module">
-    import { createMoonGlobe } from "./moon.js?v=59";
+    import { createMoonGlobe } from "./moon.js?v=60";
 
     const STORAGE_KEY = "moon-globe-loc-v1";
     const SYNODIC = 29.530588853;
@@ -431,7 +438,7 @@
       liveBtn.classList.toggle("is-preview", previewMode);
       liveBtn.classList.toggle("is-live", !previewMode);
       liveBtn.textContent = previewMode ? "Use live" : "Live";
-      if (!previewMode) sliderLabel.textContent = "Live · v59";
+      if (!previewMode) sliderLabel.textContent = "Live · v60";
     }
 
     function goLive() {
