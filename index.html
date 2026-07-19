@@ -162,6 +162,21 @@
       pointer-events: none;
     }
 
+    .m-grid-3 {
+      grid-template-columns: 1.35fr 0.9fr 0.9fr;
+    }
+
+    .m-grid-2 {
+      grid-template-columns: 1fr 1fr;
+    }
+
+    #m-station {
+      font-size: 10px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
     .m-cell {
       background: var(--cell);
       border: 1px solid var(--line);
@@ -448,6 +463,12 @@
         <div class="k">vs max mo/yr</div>
         <div class="v sm" id="m-vsmax">—</div>
       </div>
+    </div>
+    <div class="m-grid m-grid-3" aria-label="Tides">
+      <div class="m-cell">
+        <div class="k">Tide station</div>
+        <div class="v sm" id="m-station">—</div>
+      </div>
       <div class="m-cell">
         <div class="k">High tide</div>
         <div class="v sm" id="m-htide">—</div>
@@ -456,6 +477,8 @@
         <div class="k">Low tide</div>
         <div class="v sm" id="m-ltide">—</div>
       </div>
+    </div>
+    <div class="m-grid m-grid-2" aria-label="Moon rise set">
       <div class="m-cell">
         <div class="k">Moonrise</div>
         <div class="v sm" id="m-rise">—</div>
@@ -513,10 +536,10 @@
 
   <script src="astronomy.js"></script>
   <script type="module">
-    import { createMoonGlobe } from "./moon.js?v=72";
+    import { createMoonGlobe } from "./moon.js?v=73";
 
     const STORAGE_KEY = "moon-globe-loc-v1";
-    const TIDE_STATIONS_KEY = "supermoon-noaa-tide-stations-v1";
+    const TIDE_STATIONS_KEY = "supermoon-noaa-tide-stations-v2";
     const SYNODIC = 29.530588853;
     const MOON_RADIUS_KM = 1737.4;
     const MI_PER_KM = 0.621371;
@@ -550,6 +573,7 @@
       ang: document.getElementById("m-ang"),
       vsavg: document.getElementById("m-vsavg"),
       vsmax: document.getElementById("m-vsmax"),
+      station: document.getElementById("m-station"),
       htide: document.getElementById("m-htide"),
       ltide: document.getElementById("m-ltide"),
       rise: document.getElementById("m-rise"),
@@ -642,6 +666,7 @@
             id: String(s.id),
             lat: Number(s.lat),
             lng: Number(s.lng),
+            name: String(s.name || s.id),
           }));
         try {
           localStorage.setItem(
@@ -727,14 +752,22 @@
       return { nextH, nextL };
     }
 
-    /** Nearest NOAA tide-prediction station → next high/low times. */
+    function shortStationName(name) {
+      if (!name) return "—";
+      // "NEW YORK (The Battery)" → keep readable, no ellipsis mid-word if short enough
+      return name.length > 22 ? `${name.slice(0, 20)}…` : name;
+    }
+
+    /** Nearest NOAA tide-prediction station → station name + next high/low. */
     async function updateTides(lat, lon, when) {
       const seq = ++tideSeq;
       if (!Number.isFinite(lat) || !Number.isFinite(lon) || !(when instanceof Date)) {
+        el.station.textContent = "—";
         el.htide.textContent = "—";
         el.ltide.textContent = "—";
         return;
       }
+      el.station.textContent = "…";
       el.htide.textContent = "…";
       el.ltide.textContent = "…";
       try {
@@ -742,10 +775,17 @@
         if (seq !== tideSeq) return;
         const near = nearestTideStation(list, lat, lon);
         if (!near?.station) {
+          el.station.textContent = "—";
           el.htide.textContent = "—";
           el.ltide.textContent = "—";
           return;
         }
+        el.station.textContent = shortStationName(
+          near.station.name || near.station.id
+        );
+        el.station.title = near.station.name
+          ? `${near.station.name} (${Math.round(near.km)} km)`
+          : near.station.id;
         const preds = await fetchHiloPredictions(near.station.id, when);
         if (seq !== tideSeq) return;
         const { nextH, nextL } = nextExtremes(preds, when);
@@ -753,6 +793,7 @@
         el.ltide.textContent = fmtTime(nextL);
       } catch (_) {
         if (seq === tideSeq) {
+          el.station.textContent = "—";
           el.htide.textContent = "—";
           el.ltide.textContent = "—";
         }
@@ -923,7 +964,7 @@
       if (previewMode) {
         cycleDate.innerHTML = `${fmtDateTime(m.when)}<span class="live-tag">Preview</span>`;
       } else {
-        cycleDate.innerHTML = `${fmtDateTime(m.when)}<span class="live-tag">Live · v72</span>`;
+        cycleDate.innerHTML = `${fmtDateTime(m.when)}<span class="live-tag">Live · v73</span>`;
       }
 
       // Always nearest NOAA prediction station for observer lat/lon
