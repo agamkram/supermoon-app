@@ -465,13 +465,13 @@ export function createMoonGlobe(canvas, options = {}) {
     key.target.position.copy(target);
   }
 
-  /** Extra home lift above safe-band center (CSS px for 0.25in). */
+  /** Extra home lift above safe-band center (CSS px for 0.375in = 1/4" + 1/8"). */
   function homeExtraUpPx() {
-    let px = 24; // 0.25in @ 96dpi fallback
+    let px = 36; // 0.375in @ 96dpi fallback
     if (typeof document !== "undefined") {
       const probe = document.createElement("div");
       probe.style.cssText =
-        "position:absolute;visibility:hidden;pointer-events:none;width:0;height:0.25in";
+        "position:absolute;visibility:hidden;pointer-events:none;width:0;height:0.375in";
       document.body.appendChild(probe);
       px = probe.offsetHeight || px;
       probe.remove();
@@ -483,7 +483,7 @@ export function createMoonGlobe(canvas, options = {}) {
   function homeScreenOffsetY() {
     const pads = readHomePadsPx();
     // Safe-band center is above the viewport center when bottom pad > top pad.
-    // CSS translateY: negative = content moves up. Extra 1/4" on startup.
+    // CSS translateY: negative = content moves up. Extra 3/8" on startup.
     return (pads.top - pads.bottom) / 2 - homeExtraUpPx();
   }
 
