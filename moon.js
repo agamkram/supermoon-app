@@ -146,8 +146,6 @@ export function createMoonGlobe(canvas, options = {}) {
   const _panRight = new THREE.Vector3();
   const _panUp = new THREE.Vector3();
 
-  /** @type {Map<number, { x: number, y: number }>} */
-  const fingers = new Map();
   /** @type {null | { id: number, x: number, y: number }} */
   let orbitDrag = null;
   /** @type {null | { span: number, midX: number, midY: number }} */
@@ -522,21 +520,6 @@ export function createMoonGlobe(canvas, options = {}) {
     }
     syncMoonToTarget();
     readSpherical();
-  }
-
-  function twoFingerGeom() {
-    if (fingers.size < 2) return null;
-    const ids = [...fingers.keys()].sort((a, b) => a - b);
-    const a = fingers.get(ids[0]);
-    const b = fingers.get(ids[1]);
-    if (!a || !b) return null;
-    const dx = a.x - b.x;
-    const dy = a.y - b.y;
-    return {
-      span: Math.max(Math.hypot(dx, dy), 1),
-      midX: (a.x + b.x) / 2,
-      midY: (a.y + b.y) / 2,
-    };
   }
 
   function rotateSpeed() {
