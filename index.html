@@ -169,8 +169,9 @@
       pointer-events: none;
     }
 
+    /* Station gets most of the row; hi/lo stay compact */
     .m-grid-3 {
-      grid-template-columns: 1.35fr 0.9fr 0.9fr;
+      grid-template-columns: minmax(0, 1.8fr) minmax(3.4rem, 0.55fr) minmax(3.4rem, 0.55fr);
       grid-auto-rows: var(--m-row-h);
     }
 
@@ -274,7 +275,9 @@
       display: grid;
       grid-template-columns: 1fr 1fr;
       gap: 2px;
-      min-height: var(--m-row-h);
+      /* Taller so hemi can stack label above larger N/S buttons */
+      min-height: 2.65rem;
+      align-items: stretch;
     }
 
     .loc-card {
@@ -286,12 +289,18 @@
       border-radius: 6px;
       padding: 0 0.22rem;
       min-width: 0;
-      min-height: var(--m-row-h);
-      height: var(--m-row-h);
+      min-height: 2.65rem;
+      height: 100%;
       box-sizing: border-box;
     }
 
-    .loc-card.hemi-card { justify-content: center; gap: 0.15rem; }
+    .loc-card.hemi-card {
+      flex-direction: column;
+      align-items: stretch;
+      justify-content: center;
+      gap: 3px;
+      padding: 3px 0.3rem 4px;
+    }
 
     .loc-coords {
       font-family: var(--mono);
@@ -312,13 +321,28 @@
       font-weight: 600;
       letter-spacing: 0.04em;
       text-transform: uppercase;
-      color: var(--text);
-      margin-right: 0.15rem;
+      color: var(--dim);
+      line-height: 1.05;
+      text-align: center;
+      margin: 0;
     }
 
-    .hemi { display: flex; gap: 2px; flex: 0 0 auto; }
+    .hemi {
+      display: flex;
+      gap: 3px;
+      flex: 1 1 auto;
+      min-height: 0;
+      width: 100%;
+    }
 
-    .hemi button,
+    .hemi button {
+      flex: 1 1 0;
+      min-width: 0;
+      padding: 0.2rem 0.2rem;
+      font-size: 9px;
+      letter-spacing: 0.02em;
+    }
+
     .loc-card button,
     .live-btn {
       border: 1px solid var(--line);
@@ -331,6 +355,19 @@
       letter-spacing: 0.03em;
       text-transform: uppercase;
       padding: 0.08rem 0.26rem;
+      cursor: pointer;
+      line-height: 1.05;
+      white-space: nowrap;
+    }
+
+    .hemi button {
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--text);
+      font-family: "DM Sans", system-ui, sans-serif;
+      font-weight: 600;
+      text-transform: uppercase;
       cursor: pointer;
       line-height: 1.05;
       white-space: nowrap;
