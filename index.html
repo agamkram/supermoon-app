@@ -205,7 +205,7 @@
       height: 100%;
       min-height: 0;
       border: 1px solid var(--line);
-      border-radius: 3px;
+      border-radius: 6px;
       background: rgba(255, 255, 255, 0.06);
       color: var(--text);
       font-family: "DM Sans", system-ui, sans-serif;
@@ -232,6 +232,7 @@
     .m-cell {
       background: var(--cell);
       border: 1px solid var(--line);
+      border-radius: 6px;
       padding: 2px 4px 3px;
       min-width: 0;
       display: flex;
@@ -277,6 +278,7 @@
       gap: 0.2rem;
       background: var(--cell);
       border: 1px solid var(--line);
+      border-radius: 6px;
       padding: 0.1rem 0.22rem;
       min-width: 0;
     }
@@ -308,10 +310,11 @@
 
     .hemi { display: flex; gap: 2px; flex: 0 0 auto; }
 
+    .hemi button,
     .loc-card button,
     .live-btn {
       border: 1px solid var(--line);
-      border-radius: 3px;
+      border-radius: 6px;
       background: rgba(255, 255, 255, 0.05);
       color: var(--text);
       font-family: "DM Sans", system-ui, sans-serif;
@@ -336,6 +339,7 @@
       gap: 2px;
       background: var(--cell);
       border: 1px solid var(--line);
+      border-radius: 6px;
       padding: 0.15rem;
     }
 
@@ -345,7 +349,7 @@
       width: 100%;
       min-width: 0;
       border: 1px solid var(--line);
-      border-radius: 3px;
+      border-radius: 6px;
       background: rgba(0, 0, 0, 0.35);
       color: var(--text);
       font-family: var(--mono);
@@ -355,7 +359,7 @@
 
     .edit-panel button {
       border: 1px solid var(--line);
-      border-radius: 3px;
+      border-radius: 6px;
       background: rgba(255, 255, 255, 0.08);
       color: var(--text);
       font-size: 9px;
@@ -369,6 +373,7 @@
     .cycle {
       background: var(--cell);
       border: 1px solid var(--line);
+      border-radius: 6px;
       padding: 0.1rem 0.28rem 0.12rem;
       display: grid;
       gap: 0;
@@ -694,7 +699,7 @@
 
   <script src="astronomy.js"></script>
   <script type="module">
-    import { createMoonGlobe } from "./moon.js?v=85";
+    import { createMoonGlobe } from "./moon.js?v=86";
 
     const STORAGE_KEY = "moon-globe-loc-v1";
     const TIDE_STATIONS_KEY = "supermoon-noaa-tide-stations-v5";
@@ -1212,7 +1217,7 @@
         : "—";
       el.cycle.textContent = `${m.cycleDay.toFixed(1)}/${SYNODIC.toFixed(1)}`;
       el.tofull.textContent = Number.isFinite(m.daysToFull)
-        ? `${m.daysToFull.toFixed(1)}d`
+        ? `${m.daysToFull.toFixed(1)} days`
         : "—";
       el.dist.textContent = Number.isFinite(m.distMi)
         ? `${Math.round(m.distMi).toLocaleString()} mi`
@@ -1233,7 +1238,7 @@
       if (previewMode) {
         cycleDate.innerHTML = `${fmtDateTime(m.when)}<span class="live-tag">Preview</span>`;
       } else {
-        cycleDate.innerHTML = `${fmtDateTime(m.when)}<span class="live-tag">Live · v85</span>`;
+        cycleDate.innerHTML = `${fmtDateTime(m.when)}<span class="live-tag">Live · v86</span>`;
       }
 
       // Always nearest NOAA prediction station for observer lat/lon
