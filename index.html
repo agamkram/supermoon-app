@@ -513,7 +513,7 @@
 
   <script src="astronomy.js"></script>
   <script type="module">
-    import { createMoonGlobe } from "./moon.js?v=70";
+    import { createMoonGlobe } from "./moon.js?v=71";
 
     const STORAGE_KEY = "moon-globe-loc-v1";
     const SYNODIC = 29.530588853;
@@ -750,7 +750,7 @@
       if (previewMode) {
         cycleDate.innerHTML = `${fmtDateTime(m.when)}<span class="live-tag">Preview</span>`;
       } else {
-        cycleDate.innerHTML = `${fmtDateTime(m.when)}<span class="live-tag">Live · v70</span>`;
+        cycleDate.innerHTML = `${fmtDateTime(m.when)}<span class="live-tag">Live · v71</span>`;
       }
     }
 
@@ -814,16 +814,11 @@
     const globe = createMoonGlobe(canvas, {
       onReady() {
         canvas.classList.add("is-ready");
-        status.textContent = "Surface 2K · sharpening…";
+        status.textContent = "";
+        status.style.display = "none";
       },
-      onQuality(level) {
-        status.textContent =
-          level === "8k" ? "Surface 8K" : `Surface ${level.toUpperCase()}`;
-        if (level === "8k") {
-          setTimeout(() => {
-            status.style.opacity = "0.4";
-          }, 1600);
-        }
+      onQuality() {
+        /* quality upgrades stay silent */
       },
       onPhase: showPhase,
     });
