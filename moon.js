@@ -451,7 +451,7 @@ export function createMoonGlobe(canvas, options = {}) {
     target.set(0, 0, 0);
     camera.up.set(0, 1, 0);
     camera.position.set(0, 0, homeDist);
-    clearScreenPan();
+    canvas.style.transform = "";
     readSpherical();
     writeCamera();
     syncMoon();
@@ -474,29 +474,17 @@ export function createMoonGlobe(canvas, options = {}) {
   }
 
   /**
-   * 2fs pan: slide the rendered moon on screen.
-   * Uses CSS translate on the canvas (always visible) plus matching 3D pivot
-   * so orbit/zoom stay consistent after the slide.
+   * 2fs pan: move camera + look-at + moon together (screen-space).
+   * (Earlier CSS canvas translate caused L/R “edges” when zoomed.)
    */
-  let screenPanX = 0;
-  let screenPanY = 0;
-
-  function applyScreenPan(dxPx, dyPx) {
+  function panCamera(dxPx, dyPx) {
     if (Math.abs(dxPx) < 0.5 && Math.abs(dyPx) < 0.5) return;
-    screenPanX += dxPx;
-    screenPanY += dyPx;
-    // Cap so it can't be lost forever off-screen
-    const cap = Math.max(width, height, 400);
-    screenPanX = THREE.MathUtils.clamp(screenPanX, -cap, cap);
-    screenPanY = THREE.MathUtils.clamp(screenPanY, -cap, cap);
-    canvas.style.transform = `translate(${screenPanX}px, ${screenPanY}px)`;
-
-    // Keep 3D target in sync (for lighting / future logic)
     camera.updateMatrixWorld(true);
     const dist = Math.max(camDist(), MIN_DIST);
     const vFov = THREE.MathUtils.degToRad(camera.fov);
     const h = Math.max(height || window.innerHeight || 1, 1);
-    const worldPerPx = (2 * dist * Math.tan(vFov / 2)) / h;
+    // Slightly hot so phone slides feel 1:1 with the finger
+    const worldPerPx = (2.4 * dist * Math.tan(vFov / 2)) / h;
     _right.set(1, 0, 0).applyQuaternion(camera.quaternion).normalize();
     _up.set(0, 1, 0).applyQuaternion(camera.quaternion).normalize();
     const sx = -dxPx * worldPerPx;
@@ -506,16 +494,13 @@ export function createMoonGlobe(canvas, options = {}) {
     camera.position.addScaledVector(_right, sx);
     camera.position.addScaledVector(_up, sy);
     if (target.length() > MAX_PAN) {
-      target.setLength(MAX_PAN);
+      const s = MAX_PAN / target.length();
+      const nt = target.clone().multiplyScalar(s);
+      camera.position.add(nt.clone().sub(target));
+      target.copy(nt);
     }
     syncMoon();
     readSpherical();
-  }
-
-  function clearScreenPan() {
-    screenPanX = 0;
-    screenPanY = 0;
-    canvas.style.transform = "";
   }
 
   function resize(cssW, cssH) {
@@ -580,20 +565,12 @@ export function createMoonGlobe(canvas, options = {}) {
     };
   }
 
-  function gestureNote(msg) {
-    const el = document.getElementById("status");
-    if (!el) return;
-    el.textContent = msg;
-    el.dataset.state = "ok";
-  }
-
   function onTouchStart(e) {
     if (e.touches.length === 1 && isFormControl(e.target)) return;
     e.preventDefault();
     if (e.touches.length >= 2) {
       twoFinger = touchPair(e.touches);
       oneFinger = null;
-      gestureNote("2 fingers — slide to move");
     } else if (e.touches.length === 1) {
       twoFinger = null;
       oneFinger = { x: e.touches[0].clientX, y: e.touches[0].clientY };
@@ -612,12 +589,9 @@ export function createMoonGlobe(canvas, options = {}) {
         twoFinger = now;
         return;
       }
-      const dx = now.midX - twoFinger.midX;
-      const dy = now.midY - twoFinger.midY;
-      // 2fs — move moon on screen (CSS + 3D)
-      applyScreenPan(dx, dy);
-      gestureNote(`2fs pan ${Math.round(screenPanX)}, ${Math.round(screenPanY)}`);
-      // Pinch zoom
+      // 2fs = pan
+      panCamera(now.midX - twoFinger.midX, now.midY - twoFinger.midY);
+      // Pinch = zoom (full-screen canvas, no L/R letterbox from CSS)
       const ratio = now.span / twoFinger.span;
       if (Math.abs(Math.log(ratio)) > PINCH_EPS) {
         setCamDist(camDist() / Math.pow(Math.max(ratio, 0.05), PINCH_POWER));
@@ -659,7 +633,7 @@ export function createMoonGlobe(canvas, options = {}) {
     }
   }
 
-  // Pointer multi-touch (iPad / modern mobile) — same 2fs pan
+  // Pointer multi-touch (same path as touch)
   const ptrs = new Map();
   let ptrTwo = null;
 
@@ -676,14 +650,13 @@ export function createMoonGlobe(canvas, options = {}) {
   }
 
   function onPtrDown(e) {
-    if (e.pointerType === "mouse") return; // mouse handled separately
+    if (e.pointerType === "mouse") return;
     if (isFormControl(e.target)) return;
     e.preventDefault();
     ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
     if (ptrs.size >= 2) {
       ptrTwo = ptrPair();
       oneFinger = null;
-      gestureNote("2 fingers — slide to move");
     }
   }
 
@@ -698,8 +671,7 @@ export function createMoonGlobe(canvas, options = {}) {
         ptrTwo = now;
         return;
       }
-      applyScreenPan(now.midX - ptrTwo.midX, now.midY - ptrTwo.midY);
-      gestureNote(`2fs pan ${Math.round(screenPanX)}, ${Math.round(screenPanY)}`);
+      panCamera(now.midX - ptrTwo.midX, now.midY - ptrTwo.midY);
       const ratio = now.span / ptrTwo.span;
       if (Math.abs(Math.log(ratio)) > PINCH_EPS) {
         setCamDist(camDist() / Math.pow(Math.max(ratio, 0.05), PINCH_POWER));
@@ -736,7 +708,7 @@ export function createMoonGlobe(canvas, options = {}) {
     const dy = e.clientY - mouseLast.y;
     mouseLast = { x: e.clientX, y: e.clientY };
     if (mouseMode === "pan") {
-      applyScreenPan(dx, dy);
+      panCamera(dx, dy);
     } else {
       const h = Math.max(height, 1);
       readSpherical();
