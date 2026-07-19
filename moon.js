@@ -1,21 +1,18 @@
 /**
  * Hi-res 3D Moon
- * 1-finger orbit · 2-finger pan (2fs) · pinch zoom · Live/home reset
- *
- * Multi-touch via OrbitControls on #touch-plane (reliable on phone).
- * Moon mesh is glued to controls.target every frame so pan/orbit stay locked.
+ * 1-finger orbit · 2fs (two-finger slide) pan · pinch zoom · Live/home reset
  */
 import * as THREE from "three";
-import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 
 const RADIUS = 1;
-/** Home disk fill of the safe band above the bottom info area. */
 const HOME_FILL = 0.9;
-/** Close zoom — disk can fill / leave the full screen. */
 const MIN_DIST = 1.02;
 const MIN_POLAR = 0.15;
 const MAX_POLAR = Math.PI - 0.15;
 const MAX_PAN = RADIUS * 20;
+const PINCH_POWER = 0.4;
+const PINCH_EPS = 0.005;
+const WHEEL_DOLLY = 0.0012;
 
 const NEAR_SIDE_Y = -Math.PI / 2;
 
@@ -134,29 +131,17 @@ export function createMoonGlobe(canvas, options = {}) {
 
   let lastFrac = 0.5;
 
-  // —— OrbitControls on the full-screen touch plane (phone multi-touch works here) ——
-  const controls = new OrbitControls(camera, surface);
-  controls.enableDamping = true;
-  controls.dampingFactor = 0.08;
-  controls.enablePan = true;
-  controls.enableZoom = true;
-  controls.enableRotate = true;
-  controls.screenSpacePanning = true;
-  controls.zoomToCursor = false;
-  controls.minDistance = MIN_DIST;
-  controls.maxDistance = homeDist;
-  controls.minPolarAngle = MIN_POLAR;
-  controls.maxPolarAngle = MAX_POLAR;
-  controls.target.set(0, 0, 0);
-  // 1 finger = orbit · 2 fingers = pan + pinch zoom (standard OC mapping)
-  controls.touches.ONE = THREE.TOUCH.ROTATE;
-  controls.touches.TWO = THREE.TOUCH.DOLLY_PAN;
-  controls.mouseButtons.LEFT = THREE.MOUSE.ROTATE;
-  controls.mouseButtons.RIGHT = THREE.MOUSE.PAN;
-  controls.mouseButtons.MIDDLE = THREE.MOUSE.DOLLY;
-  controls.rotateSpeed = 0.55;
-  controls.zoomSpeed = 0.9;
-  controls.panSpeed = 1.2;
+  // Camera orbits `target`; moon is always at `target` (required for 2fs pan).
+  const target = new THREE.Vector3(0, 0, 0);
+  const spherical = new THREE.Spherical();
+  const _offset = new THREE.Vector3();
+  const _right = new THREE.Vector3();
+  const _up = new THREE.Vector3();
+  let prevCamDist = homeDist;
+  /** @type {null | { x: number, y: number }} */
+  let oneFinger = null;
+  /** @type {null | { midX: number, midY: number, span: number }} */
+  let twoFinger = null;
 
   let observerLat = 0;
   let observerLon = 0;
@@ -304,11 +289,10 @@ export function createMoonGlobe(canvas, options = {}) {
     const lz = _toSun.dot(_zAxis);
 
     lastFrac = frac;
-    const t = controls.target;
-    key.position.set(lx, ly, lz).multiplyScalar(12).add(t);
-    key.target.position.copy(t);
+    key.position.set(lx, ly, lz).multiplyScalar(12).add(target);
+    key.target.position.copy(target);
     key.intensity = LIGHTING.keyBase + frac * LIGHTING.keyFracGain;
-    earthshine.position.set(0.04, 0.08, 10).add(t);
+    earthshine.position.set(0.04, 0.08, 10).add(target);
     updateViewLighting();
 
     const lib = A.Libration(time);
@@ -322,10 +306,10 @@ export function createMoonGlobe(canvas, options = {}) {
     }
     const zRot = southern ? Math.PI : 0;
     moonGroup.rotation.set(0, 0, zRot);
-    moonGroup.position.copy(t);
+    moonGroup.position.copy(target);
     const viewZ = new THREE.Vector3(0, 0, 1);
-    key.position.sub(t).applyAxisAngle(viewZ, zRot).add(t);
-    earthshine.position.sub(t).applyAxisAngle(viewZ, zRot).add(t);
+    key.position.sub(target).applyAxisAngle(viewZ, zRot).add(target);
+    earthshine.position.sub(target).applyAxisAngle(viewZ, zRot).add(target);
 
     lastPhaseInfo = {
       phase01,
@@ -377,7 +361,7 @@ export function createMoonGlobe(canvas, options = {}) {
   }
 
   function earthViewAmount() {
-    _camDir.copy(camera.position).sub(controls.target).normalize();
+    _camDir.copy(camera.position).sub(target).normalize();
     return THREE.MathUtils.smoothstep(0.38, 0.88, _camDir.z);
   }
 
@@ -434,21 +418,86 @@ export function createMoonGlobe(canvas, options = {}) {
     return Math.max(distV, distH, MIN_DIST + 0.2);
   }
 
+  function readSpherical() {
+    _offset.copy(camera.position).sub(target);
+    if (_offset.lengthSq() < 1e-12) _offset.set(0, 0, homeDist || 3);
+    spherical.setFromVector3(_offset);
+  }
+
+  function writeCamera() {
+    spherical.phi = THREE.MathUtils.clamp(spherical.phi, MIN_POLAR, MAX_POLAR);
+    spherical.radius = THREE.MathUtils.clamp(
+      spherical.radius,
+      MIN_DIST,
+      Math.max(homeDist, MIN_DIST + 0.2)
+    );
+    spherical.makeSafe();
+    _offset.setFromSpherical(spherical);
+    camera.position.copy(target).add(_offset);
+    camera.up.set(0, 1, 0);
+    camera.lookAt(target);
+  }
+
+  function camDist() {
+    return camera.position.distanceTo(target);
+  }
+
+  function syncMoon() {
+    moonGroup.position.copy(target);
+    key.target.position.copy(target);
+  }
+
   function applyHomeFraming() {
-    controls.target.set(0, 0, 0);
+    target.set(0, 0, 0);
     camera.up.set(0, 1, 0);
     camera.position.set(0, 0, homeDist);
-    controls.minDistance = MIN_DIST;
-    controls.maxDistance = homeDist;
-    controls.update();
-    moonGroup.position.set(0, 0, 0);
-    key.target.position.set(0, 0, 0);
+    readSpherical();
+    writeCamera();
+    syncMoon();
     prevCamDist = homeDist;
     applyEphemeris();
   }
 
-  function camDist() {
-    return camera.position.distanceTo(controls.target);
+  function setCamDist(dist) {
+    const prev = camDist();
+    dist = THREE.MathUtils.clamp(dist, MIN_DIST, Math.max(homeDist, MIN_DIST + 0.2));
+    // Un-zoom to max from a closer view → full home
+    if (dist >= homeDist - 1e-4 && prev < homeDist * 0.99) {
+      applyHomeFraming();
+      return;
+    }
+    readSpherical();
+    spherical.radius = dist;
+    writeCamera();
+    prevCamDist = camDist();
+  }
+
+  /** 2fs: slide moon by moving camera + target + mesh together. */
+  function panCamera(dxPx, dyPx) {
+    if (Math.abs(dxPx) < 0.5 && Math.abs(dyPx) < 0.5) return;
+    // Force camera matrix current
+    camera.updateMatrixWorld(true);
+    const dist = Math.max(camDist(), MIN_DIST);
+    const vFov = THREE.MathUtils.degToRad(camera.fov);
+    const worldPerPx =
+      (2 * dist * Math.tan(vFov / 2)) / Math.max(height || window.innerHeight || 1, 1);
+    _right.setFromMatrixColumn(camera.matrixWorld, 0).normalize();
+    _up.setFromMatrixColumn(camera.matrixWorld, 1).normalize();
+    // Finger right → content follows right → camera left
+    const shift = _right
+      .multiplyScalar(-dxPx * worldPerPx)
+      .add(_up.multiplyScalar(dyPx * worldPerPx));
+    target.add(shift);
+    camera.position.add(shift);
+
+    if (target.length() > MAX_PAN) {
+      const s = MAX_PAN / target.length();
+      const nt = target.clone().multiplyScalar(s);
+      camera.position.add(nt.clone().sub(target));
+      target.copy(nt);
+    }
+    syncMoon();
+    readSpherical();
   }
 
   function resize(cssW, cssH) {
@@ -458,7 +507,7 @@ export function createMoonGlobe(canvas, options = {}) {
 
     const prevHome = homeDist;
     const dist = camDist();
-    const atHome = dist >= prevHome * 0.97 && controls.target.lengthSq() < 1e-4;
+    const atHome = dist >= prevHome * 0.97 && target.lengthSq() < 1e-4;
     const zoomFrac = prevHome > 0 ? dist / prevHome : 1;
 
     width = w;
@@ -471,20 +520,8 @@ export function createMoonGlobe(canvas, options = {}) {
     renderer.setSize(w, h, false);
 
     homeDist = computeHomeDistance(w, h);
-    controls.maxDistance = homeDist;
-    controls.minDistance = MIN_DIST;
-
-    if (atHome) {
-      applyHomeFraming();
-    } else {
-      // Keep relative zoom level
-      const d = THREE.MathUtils.clamp(homeDist * zoomFrac, MIN_DIST, homeDist);
-      const offset = camera.position.clone().sub(controls.target);
-      if (offset.lengthSq() < 1e-10) offset.set(0, 0, 1);
-      offset.setLength(d);
-      camera.position.copy(controls.target).add(offset);
-      controls.update();
-    }
+    if (atHome) applyHomeFraming();
+    else setCamDist(homeDist * zoomFrac);
   }
 
   function fitToHost() {
@@ -505,52 +542,161 @@ export function createMoonGlobe(canvas, options = {}) {
     applyHomeFraming();
   }
 
-  /**
-   * Keep mesh on orbit pivot so 2fs pan moves the moon.
-   * IMPORTANT: do NOT snap home whenever target moves at max zoom — that
-   * cancelled every pan on the default view (looked like “no 2fs”).
-   * Home snap only when the user *zooms out* into max distance.
-   */
-  let prevCamDist = homeDist;
+  // —— Touch: direct e.touches (no OrbitControls, no mode lock) ——
 
-  function syncMoonToControls() {
-    moonGroup.position.copy(controls.target);
-    key.target.position.copy(controls.target);
+  function isFormControl(el) {
+    return !!(el && el.closest && el.closest("input,button,select,textarea,a,label"));
+  }
 
-    if (controls.target.length() > MAX_PAN) {
-      controls.target.setLength(MAX_PAN);
+  function touchPair(list) {
+    if (!list || list.length < 2) return null;
+    const a = list[0];
+    const b = list[1];
+    return {
+      midX: (a.clientX + b.clientX) / 2,
+      midY: (a.clientY + b.clientY) / 2,
+      span: Math.max(
+        Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY),
+        1
+      ),
+    };
+  }
+
+  function onTouchStart(e) {
+    if (e.touches.length === 1 && isFormControl(e.target)) return;
+    e.preventDefault();
+    if (e.touches.length >= 2) {
+      twoFinger = touchPair(e.touches);
+      oneFinger = null;
+    } else if (e.touches.length === 1) {
+      twoFinger = null;
+      oneFinger = { x: e.touches[0].clientX, y: e.touches[0].clientY };
     }
+  }
 
-    const dist = camDist();
-    // Crossed into full zoom-out from a closer view → restore start place
-    if (prevCamDist < homeDist * 0.98 && dist >= homeDist * 0.99) {
-      applyHomeFraming();
-      prevCamDist = homeDist;
+  function onTouchMove(e) {
+    if (e.touches.length === 0) return;
+    if (e.touches.length === 1 && isFormControl(e.target) && !oneFinger) return;
+    e.preventDefault();
+
+    if (e.touches.length >= 2) {
+      const now = touchPair(e.touches);
+      if (!now) return;
+      if (!twoFinger) {
+        twoFinger = now;
+        return;
+      }
+      // 2fs = pan (this is the required gesture)
+      panCamera(now.midX - twoFinger.midX, now.midY - twoFinger.midY);
+      // Pinch = zoom
+      const ratio = now.span / twoFinger.span;
+      if (Math.abs(Math.log(ratio)) > PINCH_EPS) {
+        setCamDist(camDist() / Math.pow(Math.max(ratio, 0.05), PINCH_POWER));
+      }
+      twoFinger = now;
       return;
     }
-    prevCamDist = dist;
+
+    if (oneFinger && e.touches.length === 1) {
+      const t = e.touches[0];
+      const dx = t.clientX - oneFinger.x;
+      const dy = t.clientY - oneFinger.y;
+      const h = Math.max(height, 1);
+      const dist = camDist();
+      const z = THREE.MathUtils.clamp(
+        (dist - MIN_DIST) / Math.max(homeDist - MIN_DIST, 0.01),
+        0,
+        1
+      );
+      const speed = THREE.MathUtils.lerp(0.28, 0.55, z * z);
+      readSpherical();
+      spherical.theta -= (2 * Math.PI * dx * speed) / h;
+      spherical.phi -= (2 * Math.PI * dy * speed) / h;
+      writeCamera();
+      oneFinger = { x: t.clientX, y: t.clientY };
+    }
   }
 
-  // Phone: clearer pan, calmer pinch
-  const isTouch =
-    typeof window !== "undefined" &&
-    window.matchMedia("(pointer: coarse)").matches;
-  controls.zoomSpeed = isTouch ? 0.7 : 0.95;
-  controls.rotateSpeed = isTouch ? 0.65 : 0.5;
-  controls.panSpeed = isTouch ? 1.6 : 1.2;
+  function onTouchEnd(e) {
+    if (e.touches.length >= 2) {
+      twoFinger = touchPair(e.touches);
+      oneFinger = null;
+    } else if (e.touches.length === 1) {
+      twoFinger = null;
+      oneFinger = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    } else {
+      twoFinger = null;
+      oneFinger = null;
+    }
+  }
 
-  surface.style.touchAction = "none";
+  let mouseMode = null;
+  let mouseLast = null;
+
+  function onMouseDown(e) {
+    if (isFormControl(e.target)) return;
+    if (e.button === 0 && !e.shiftKey) mouseMode = "orbit";
+    else if (e.button === 0 && e.shiftKey) mouseMode = "pan";
+    else if (e.button === 2) {
+      mouseMode = "pan";
+      e.preventDefault();
+    } else return;
+    mouseLast = { x: e.clientX, y: e.clientY };
+    window.addEventListener("mousemove", onMouseMove, { passive: false });
+    window.addEventListener("mouseup", onMouseUp);
+  }
+
+  function onMouseMove(e) {
+    if (!mouseLast || !mouseMode) return;
+    e.preventDefault();
+    const dx = e.clientX - mouseLast.x;
+    const dy = e.clientY - mouseLast.y;
+    mouseLast = { x: e.clientX, y: e.clientY };
+    if (mouseMode === "pan") {
+      panCamera(dx, dy);
+    } else {
+      const h = Math.max(height, 1);
+      readSpherical();
+      spherical.theta -= (2 * Math.PI * dx * 0.5) / h;
+      spherical.phi -= (2 * Math.PI * dy * 0.5) / h;
+      writeCamera();
+    }
+  }
+
+  function onMouseUp() {
+    mouseMode = null;
+    mouseLast = null;
+    window.removeEventListener("mousemove", onMouseMove);
+    window.removeEventListener("mouseup", onMouseUp);
+  }
+
+  function onWheel(e) {
+    if (isFormControl(e.target)) return;
+    e.preventDefault();
+    setCamDist(camDist() * Math.exp(e.deltaY * WHEEL_DOLLY));
+  }
+
+  function onContextMenu(e) {
+    e.preventDefault();
+  }
+
+  const cap = { passive: false, capture: true };
+  window.addEventListener("touchstart", onTouchStart, cap);
+  window.addEventListener("touchmove", onTouchMove, cap);
+  window.addEventListener("touchend", onTouchEnd, { capture: true });
+  window.addEventListener("touchcancel", onTouchEnd, { capture: true });
+  surface.addEventListener("mousedown", onMouseDown);
+  surface.addEventListener("wheel", onWheel, { passive: false });
+  surface.addEventListener("contextmenu", onContextMenu);
   canvas.style.touchAction = "none";
-  if (typeof document !== "undefined") {
-    document.documentElement.style.touchAction = "none";
-    document.body.style.touchAction = "none";
-  }
+  surface.style.touchAction = "none";
+  document.documentElement.style.touchAction = "none";
+  document.body.style.touchAction = "none";
 
   function animate() {
     if (disposed) return;
     animId = requestAnimationFrame(animate);
-    controls.update();
-    syncMoonToControls();
+    syncMoon();
     updateViewLighting();
     renderer.render(scene, camera);
   }
@@ -573,7 +719,15 @@ export function createMoonGlobe(canvas, options = {}) {
     dispose() {
       disposed = true;
       cancelAnimationFrame(animId);
-      controls.dispose();
+      window.removeEventListener("touchstart", onTouchStart, true);
+      window.removeEventListener("touchmove", onTouchMove, true);
+      window.removeEventListener("touchend", onTouchEnd, true);
+      window.removeEventListener("touchcancel", onTouchEnd, true);
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseUp);
+      surface.removeEventListener("mousedown", onMouseDown);
+      surface.removeEventListener("wheel", onWheel);
+      surface.removeEventListener("contextmenu", onContextMenu);
       if (mesh) {
         mesh.geometry.dispose();
         material?.map?.dispose();
