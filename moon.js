@@ -15,8 +15,11 @@ const PINCH_EPS = 0.005;
 const WHEEL_DOLLY = 0.0012;
 /** Base vertical FOV (degrees). Buffer render expands FOV so center crop matches this. */
 const BASE_FOV = 40;
-/** Extra screenfuls of canvas around the viewport so CSS 2fs pan never shows edges. */
-const PAN_MARGIN = 1;
+/**
+ * Extra screen fraction for CSS pan buffer.
+ * Was 1.0 → ~3× linear size × DPR ≈ Safari tab crash (“A problem repeatedly occurred”).
+ */
+const PAN_MARGIN = 0.35;
 
 const NEAR_SIDE_Y = -Math.PI / 2;
 
@@ -83,7 +86,13 @@ export function createMoonGlobe(canvas, options = {}) {
     alpha: false,
     powerPreference: "high-performance",
   });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2.5));
+  const isCoarse =
+    typeof window !== "undefined" &&
+    window.matchMedia("(pointer: coarse)").matches;
+  // Cap DPR hard on phones — large buffers + 8K maps OOM Safari
+  renderer.setPixelRatio(
+    Math.min(window.devicePixelRatio || 1, isCoarse ? 1.5 : 2)
+  );
   renderer.setClearColor(0x020308, 1);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -218,7 +227,10 @@ export function createMoonGlobe(canvas, options = {}) {
       if (typeof onQuality === "function") onQuality("2k");
       if (!hqStarted) {
         hqStarted = true;
-        setTimeout(() => upgradeHigh(), 400);
+        // Delay HQ; skip 8K on coarse pointers (phones) — was crashing Safari
+        const delay = isCoarse ? 0 : 600;
+        if (!isCoarse) setTimeout(() => upgradeHigh(), delay);
+        else if (typeof onQuality === "function") onQuality("2k-phone");
       }
     });
     const normal = loader.load(cfg.normal, configureNormal);
@@ -228,7 +240,7 @@ export function createMoonGlobe(canvas, options = {}) {
   }
 
   function upgradeHigh() {
-    if (disposed) return;
+    if (disposed || isCoarse) return;
     const cfg = LOD.high;
     let mapDone = null;
     let normalDone = null;
@@ -568,7 +580,17 @@ export function createMoonGlobe(canvas, options = {}) {
     camera.aspect = bufferW / bufferH;
     camera.updateProjectionMatrix();
 
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2.5));
+    renderer.setPixelRatio(
+      Math.min(window.devicePixelRatio || 1, isCoarse ? 1.5 : 2)
+    );
+    // Cap absolute buffer size (~4M CSS px) so phones don't OOM
+    const maxDim = isCoarse ? 1600 : 2400;
+    if (bufferW > maxDim || bufferH > maxDim) {
+      const s = maxDim / Math.max(bufferW, bufferH);
+      bufferW = Math.max(w, Math.floor(bufferW * s));
+      bufferH = Math.max(h, Math.floor(bufferH * s));
+      panMarginPx = Math.floor(Math.min(bufferW - w, bufferH - h) / 2);
+    }
     renderer.setSize(bufferW, bufferH, false);
 
     canvas.style.position = "absolute";

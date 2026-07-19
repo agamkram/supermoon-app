@@ -333,7 +333,7 @@
 
   <script src="astronomy.js"></script>
   <script type="module">
-    import { createMoonGlobe } from "./moon.js?v=61";
+    import { createMoonGlobe } from "./moon.js?v=62";
 
     const STORAGE_KEY = "moon-globe-loc-v1";
     const SYNODIC = 29.530588853;
@@ -432,7 +432,7 @@
       liveBtn.classList.toggle("is-preview", previewMode);
       liveBtn.classList.toggle("is-live", !previewMode);
       liveBtn.textContent = previewMode ? "Use live" : "Live";
-      if (!previewMode) sliderLabel.textContent = "Live · v61";
+      if (!previewMode) sliderLabel.textContent = "Live · v62";
     }
 
     function goLive() {
