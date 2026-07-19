@@ -15,7 +15,7 @@
   <link rel="preload" href="moon-2k.jpg" as="image" type="image/jpeg" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500&family=Michroma&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&family=IBM+Plex+Mono:wght@500;600&family=Michroma&display=swap" rel="stylesheet" />
   <link rel="preconnect" href="https://unpkg.com" crossorigin />
   <link rel="modulepreload" href="https://unpkg.com/three@0.160.0/build/three.module.js" />
   <style>
@@ -23,9 +23,13 @@
       color-scheme: dark;
       --text: #e8edf7;
       --muted: #8b95a8;
+      --dim: #7a8496;
+      --faint: #4a5366;
+      --cell: #12161e;
       --panel: rgba(8, 12, 20, 0.72);
-      --line: rgba(255, 255, 255, 0.1);
-      /* Moon host bottom inset = room for bottom info assembly */
+      --line: #2a3140;
+      --moon: #c8d0e0;
+      --mono: "IBM Plex Mono", ui-monospace, monospace;
     }
 
     * { box-sizing: border-box; }
@@ -117,26 +121,31 @@
       text-shadow: 0 1px 12px rgba(0, 0, 0, 0.55);
     }
 
-    /* Compact temp chrome — full card redesign later */
+    /*
+     * Bottom metrics card (Solar-style cells).
+     * pointer-events:none on shell — only controls capture so 2fs works over empty areas.
+     * Moon zooms over this; un-zoom / Live to use the boxes.
+     */
     .loc-bar {
       position: fixed;
       z-index: 3;
-      left: 50%;
+      left: 0;
+      right: 0;
       bottom: 0;
-      transform: translateX(-50%);
-      width: min(400px, calc(100% - 1rem));
-      margin-bottom: max(0.4rem, env(safe-area-inset-bottom));
-      padding: 0.35rem 0.5rem 0.4rem;
-      border-radius: 12px;
-      background: var(--panel);
-      border: 1px solid var(--line);
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
-      /* Card chrome does not steal 2fs — only real controls capture */
+      width: 100%;
+      max-width: 430px;
+      margin: 0 auto;
+      padding:
+        0.15rem
+        max(0.35rem, env(safe-area-inset-right))
+        max(0.35rem, env(safe-area-inset-bottom))
+        max(0.35rem, env(safe-area-inset-left));
+      background: linear-gradient(to top, rgba(2, 3, 8, 0.97) 70%, rgba(2, 3, 8, 0.55) 100%);
       pointer-events: none;
       touch-action: none;
-      display: grid;
-      gap: 0.28rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.18rem;
     }
 
     .loc-bar input,
@@ -146,133 +155,223 @@
       touch-action: manipulation;
     }
 
-    .loc-row {
+    .m-grid {
       display: grid;
-      grid-template-columns: 1fr 1fr auto auto;
-      gap: 0.28rem;
-      align-items: center;
+      grid-template-columns: 1.2fr 0.85fr 1fr 0.9fr;
+      gap: 2px;
+      pointer-events: none;
     }
 
-    .loc-bar label {
-      display: grid;
+    .m-cell {
+      background: var(--cell);
+      border: 1px solid var(--line);
+      padding: 2px 4px 3px;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
       gap: 0;
-      font-size: 0;
-      color: transparent;
     }
 
-    .loc-bar label::before {
-      content: attr(data-short);
-      font-size: 0.58rem;
+    .m-cell .k {
+      font-size: 7px;
+      font-weight: 600;
       letter-spacing: 0.04em;
       text-transform: uppercase;
-      color: var(--muted);
+      color: var(--dim);
       line-height: 1.1;
-      margin-bottom: 0.1rem;
     }
 
-    .loc-bar input {
-      width: 100%;
-      border: 1px solid var(--line);
-      border-radius: 6px;
-      background: rgba(0, 0, 0, 0.35);
+    .m-cell .v {
+      font-family: var(--mono);
+      font-weight: 600;
+      font-size: 12px;
+      letter-spacing: -0.02em;
+      line-height: 1.1;
       color: var(--text);
-      font: inherit;
-      font-size: 0.75rem;
-      padding: 0.28rem 0.35rem;
+      white-space: normal;
+    }
+
+    .m-cell .v.sm { font-size: 11px; }
+    .m-cell .v.moon {
+      color: var(--moon);
+      font-size: 11px;
+      letter-spacing: -0.03em;
+    }
+
+    .loc-strip {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 2px;
+    }
+
+    .loc-card {
+      display: flex;
+      align-items: center;
+      gap: 0.2rem;
+      background: var(--cell);
+      border: 1px solid var(--line);
+      padding: 0.1rem 0.22rem;
       min-width: 0;
     }
 
-    .loc-bar button {
-      border: 1px solid var(--line);
-      border-radius: 6px;
-      background: rgba(255, 255, 255, 0.06);
-      color: var(--text);
-      font: inherit;
-      font-size: 0.7rem;
-      padding: 0.3rem 0.4rem;
-      cursor: pointer;
-      white-space: nowrap;
-      align-self: end;
-    }
+    .loc-card.hemi-card { justify-content: center; gap: 0.15rem; }
 
-    .loc-bar button:hover {
-      background: rgba(255, 255, 255, 0.1);
-    }
-
-    .loc-meta {
-      font-size: 0.62rem;
-      color: var(--muted);
-      text-align: center;
-      line-height: 1.2;
+    .loc-coords {
+      font-family: var(--mono);
+      font-size: 9.5px;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+      line-height: 1.05;
+      flex: 1 1 auto;
+      min-width: 0;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
+      color: var(--text);
     }
 
-    .hemi-row {
-      display: flex;
-      justify-content: center;
-      gap: 0.3rem;
+    .hemi-label {
+      font-size: 7px;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--text);
+      margin-right: 0.15rem;
     }
 
-    .hemi-row button {
-      align-self: center;
-      min-width: 2.4rem;
-      padding: 0.2rem 0.45rem;
-      font-size: 0.65rem;
+    .hemi { display: flex; gap: 2px; flex: 0 0 auto; }
+
+    .loc-card button,
+    .live-btn {
+      border: 1px solid var(--line);
+      border-radius: 3px;
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--text);
+      font-family: "DM Sans", system-ui, sans-serif;
+      font-size: 8px;
+      font-weight: 600;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+      padding: 0.08rem 0.26rem;
+      cursor: pointer;
+      line-height: 1.05;
+      white-space: nowrap;
     }
 
-    .hemi-row button.active {
+    .hemi button.active {
       background: rgba(255, 255, 255, 0.14);
       border-color: rgba(255, 255, 255, 0.28);
     }
 
-    .phase-panel {
-      display: grid;
-      grid-template-columns: 1fr auto;
-      gap: 0.35rem 0.4rem;
-      align-items: center;
-      padding-bottom: 0.28rem;
-      border-bottom: 1px solid var(--line);
-    }
-
-    .phase-panel-top {
+    .edit-panel {
       display: none;
+      grid-template-columns: 1fr 1fr auto;
+      gap: 2px;
+      background: var(--cell);
+      border: 1px solid var(--line);
+      padding: 0.15rem;
     }
 
-    .phase-panel .live-btn {
-      grid-column: 2;
-      grid-row: 1;
-      padding: 0.22rem 0.5rem;
-      font-size: 0.68rem;
+    .edit-panel.is-open { display: grid; }
+
+    .edit-panel input {
+      width: 100%;
+      min-width: 0;
+      border: 1px solid var(--line);
+      border-radius: 3px;
+      background: rgba(0, 0, 0, 0.35);
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: 11px;
+      padding: 0.2rem 0.28rem;
+    }
+
+    .edit-panel button {
+      border: 1px solid var(--line);
+      border-radius: 3px;
+      background: rgba(255, 255, 255, 0.08);
+      color: var(--text);
+      font-size: 9px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      padding: 0.2rem 0.4rem;
+      cursor: pointer;
+    }
+
+    .cycle {
+      background: var(--cell);
+      border: 1px solid var(--line);
+      padding: 0.1rem 0.28rem 0.12rem;
+      display: grid;
+      gap: 0;
+    }
+
+    .cycle-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.3rem;
+    }
+
+    .cycle-date {
+      font-family: var(--mono);
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+      color: var(--text);
+      line-height: 1.05;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      min-width: 0;
+    }
+
+    .cycle-date .live-tag {
+      font-family: "DM Sans", system-ui, sans-serif;
+      font-size: 8px;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: var(--dim);
+      margin-left: 0.28rem;
+    }
+
+    .live-btn {
       border-radius: 999px;
-      align-self: center;
+      padding: 0.06rem 0.38rem;
+      background: rgba(255, 255, 255, 0.1);
+      flex: 0 0 auto;
     }
 
-    .phase-panel .live-btn.is-preview {
-      background: rgba(255, 255, 255, 0.12);
-      border-color: rgba(255, 255, 255, 0.22);
+    .live-btn.is-preview {
+      background: rgba(255, 255, 255, 0.16);
+      border-color: rgba(255, 255, 255, 0.28);
+    }
+
+    .slider-track {
+      height: 18px;
+      display: flex;
+      align-items: center;
     }
 
     #phase-slider {
-      grid-column: 1;
-      grid-row: 1;
       width: 100%;
-      min-height: 28px;
-      height: 28px;
+      height: 18px;
       margin: 0;
-      cursor: pointer;
       accent-color: #c8d4e8;
-      touch-action: pan-y;
+      cursor: pointer;
     }
 
-    .phase-slider-label {
-      grid-column: 1 / -1;
-      font-size: 0.6rem;
-      color: var(--muted);
-      text-align: center;
-      line-height: 1.1;
-      min-height: 0;
+    .slider-ends {
+      display: flex;
+      justify-content: space-between;
+      font-size: 7.5px;
+      color: var(--faint);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      line-height: 1;
+      margin-top: 1px;
     }
 
     .status {
@@ -280,7 +379,7 @@
       z-index: 2;
       left: 0;
       right: 0;
-      bottom: calc(5.25rem + env(safe-area-inset-bottom));
+      top: calc(0.45in + env(safe-area-inset-top, 0px));
       text-align: center;
       pointer-events: none;
       font-size: 0.65rem;
@@ -316,70 +415,173 @@
   <p class="status" id="status" data-state="loading">Loading surface…</p>
 
   <div class="loc-bar" id="loc-bar">
-    <div class="phase-panel">
-      <div class="phase-panel-top">
-        <span>Lunar cycle</span>
+    <div class="m-grid" aria-label="Lunar metrics">
+      <div class="m-cell">
+        <div class="k">Phase</div>
+        <div class="v moon" id="m-phase">—</div>
       </div>
-      <input
-        type="range"
-        id="phase-slider"
-        min="0"
-        max="1000"
-        value="0"
-        step="1"
-        aria-label="Scrub through one full lunar cycle"
-      />
-      <button type="button" class="live-btn is-live" id="live-btn" title="Reset to live moon for your location">Live</button>
-      <div class="phase-slider-label" id="slider-label">Live</div>
+      <div class="m-cell">
+        <div class="k">Illuminated</div>
+        <div class="v" id="m-illum">—</div>
+      </div>
+      <div class="m-cell">
+        <div class="k">Cycle day</div>
+        <div class="v sm" id="m-cycle">—</div>
+      </div>
+      <div class="m-cell">
+        <div class="k">To full</div>
+        <div class="v" id="m-tofull">—</div>
+      </div>
+      <div class="m-cell">
+        <div class="k">Distance</div>
+        <div class="v sm" id="m-dist">—</div>
+      </div>
+      <div class="m-cell">
+        <div class="k">Angular size</div>
+        <div class="v sm" id="m-ang">—</div>
+      </div>
+      <div class="m-cell">
+        <div class="k">vs average</div>
+        <div class="v sm" id="m-vsavg">—</div>
+      </div>
+      <div class="m-cell">
+        <div class="k">vs max mo/yr</div>
+        <div class="v sm" id="m-vsmax">—</div>
+      </div>
+      <div class="m-cell">
+        <div class="k">High tide</div>
+        <div class="v sm" id="m-htide">—</div>
+      </div>
+      <div class="m-cell">
+        <div class="k">Low tide</div>
+        <div class="v sm" id="m-ltide">—</div>
+      </div>
+      <div class="m-cell">
+        <div class="k">Moonrise</div>
+        <div class="v sm" id="m-rise">—</div>
+      </div>
+      <div class="m-cell">
+        <div class="k">Moonset</div>
+        <div class="v sm" id="m-set">—</div>
+      </div>
     </div>
-    <div class="loc-row">
-      <label data-short="Lat">
-        Lat
-        <input id="lat-input" type="number" inputmode="decimal" step="0.0001" min="-90" max="90" value="0" aria-label="Latitude" />
-      </label>
-      <label data-short="Lon">
-        Lon
-        <input id="lon-input" type="number" inputmode="decimal" step="0.0001" min="-180" max="180" value="0" aria-label="Longitude" />
-      </label>
+
+    <div class="loc-strip">
+      <div class="loc-card">
+        <div class="loc-coords" id="loc-coords">—</div>
+        <button type="button" id="edit-btn" title="Edit coordinates">Edit</button>
+        <button type="button" id="geo-btn" title="Use device location">Current</button>
+      </div>
+      <div class="loc-card hemi-card">
+        <span class="hemi-label">Hemisphere</span>
+        <div class="hemi" role="group" aria-label="Hemisphere">
+          <button type="button" id="hemi-n" class="active">Northern</button>
+          <button type="button" id="hemi-s">Southern</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="edit-panel" id="edit-panel" hidden>
+      <input id="lat-input" type="number" inputmode="decimal" step="0.0001" min="-90" max="90" value="0" aria-label="Latitude" />
+      <input id="lon-input" type="number" inputmode="decimal" step="0.0001" min="-180" max="180" value="0" aria-label="Longitude" />
       <button type="button" id="apply-loc" title="Apply coordinates">Go</button>
-      <button type="button" id="geo-btn" title="Use device location">GPS</button>
     </div>
-    <div class="hemi-row">
-      <button type="button" id="hemi-n" class="active" title="Northern hemisphere test">N</button>
-      <button type="button" id="hemi-s" title="Southern hemisphere test">S</button>
+
+    <div class="cycle">
+      <div class="cycle-top">
+        <div class="cycle-date" id="cycle-date">—</div>
+        <button type="button" class="live-btn is-live" id="live-btn" title="Reset to live moon">Live</button>
+      </div>
+      <div class="slider-track">
+        <input
+          type="range"
+          id="phase-slider"
+          min="0"
+          max="1000"
+          value="0"
+          step="1"
+          aria-label="Scrub through one full lunar cycle"
+        />
+      </div>
+      <div class="slider-ends">
+        <span>New</span>
+        <span id="slider-ends-mid">—</span>
+        <span>New</span>
+      </div>
     </div>
-    <div class="loc-meta" id="loc-meta">Location…</div>
   </div>
 
   <script src="astronomy.js"></script>
   <script type="module">
-    import { createMoonGlobe } from "./moon.js?v=69";
+    import { createMoonGlobe } from "./moon.js?v=70";
 
     const STORAGE_KEY = "moon-globe-loc-v1";
     const SYNODIC = 29.530588853;
+    const MOON_RADIUS_KM = 1737.4;
+    const MI_PER_KM = 0.621371;
+    /** Mean full-moon angular diameter (arcmin) — classic ~31′ */
+    const AVG_ANG_ARCMIN = 31.07;
+
     const canvas = document.getElementById("moon-canvas");
     const status = document.getElementById("status");
-
     const latInput = document.getElementById("lat-input");
     const lonInput = document.getElementById("lon-input");
-    const locMeta = document.getElementById("loc-meta");
+    const locCoords = document.getElementById("loc-coords");
+    const editBtn = document.getElementById("edit-btn");
+    const editPanel = document.getElementById("edit-panel");
     const geoBtn = document.getElementById("geo-btn");
     const applyBtn = document.getElementById("apply-loc");
     const phaseSlider = document.getElementById("phase-slider");
-    const sliderLabel = document.getElementById("slider-label");
+    const cycleDate = document.getElementById("cycle-date");
+    const sliderEndsMid = document.getElementById("slider-ends-mid");
     const liveBtn = document.getElementById("live-btn");
     const hemiN = document.getElementById("hemi-n");
     const hemiS = document.getElementById("hemi-s");
+
+    const el = {
+      phase: document.getElementById("m-phase"),
+      illum: document.getElementById("m-illum"),
+      cycle: document.getElementById("m-cycle"),
+      tofull: document.getElementById("m-tofull"),
+      dist: document.getElementById("m-dist"),
+      ang: document.getElementById("m-ang"),
+      vsavg: document.getElementById("m-vsavg"),
+      vsmax: document.getElementById("m-vsmax"),
+      htide: document.getElementById("m-htide"),
+      ltide: document.getElementById("m-ltide"),
+      rise: document.getElementById("m-rise"),
+      set: document.getElementById("m-set"),
+    };
 
     let previewMode = false;
     let sliderAnchorDate = null;
     let sliderAnchorPhase = 0;
     let previewRaf = 0;
+    let metricsRaf = 0;
+    /** @type {{ yr: number, maxAng: number } | null} */
+    let yearMaxCache = null;
 
     function fmtCoord(n, pos, neg) {
       const a = Math.abs(n);
       const hemi = n >= 0 ? pos : neg;
       return `${a.toFixed(2)}°${hemi}`;
+    }
+
+    function fmtTime(date) {
+      if (!(date instanceof Date) || Number.isNaN(date.getTime())) return "—";
+      let h = date.getHours();
+      const m = date.getMinutes();
+      const ap = h >= 12 ? "p" : "a";
+      h = h % 12;
+      if (h === 0) h = 12;
+      return `${h}:${String(m).padStart(2, "0")}${ap}`;
+    }
+
+    function fmtDateTime(date) {
+      if (!(date instanceof Date) || Number.isNaN(date.getTime())) return "—";
+      const mon = date.toLocaleString(undefined, { month: "short" });
+      const day = date.getDate();
+      return `${mon} ${day} · ${fmtTime(date)}`;
     }
 
     function saveLoc(lat, lon, source) {
@@ -418,27 +620,158 @@
       return new Date(anchorDate.getTime() + delta * SYNODIC * 86400000);
     }
 
-    function showPhase(info) {
-      if (!info) return;
-      // Phase name/illumination moves to bottom info assembly later
-      if (previewMode) {
-        const day = (info.phase01 * SYNODIC).toFixed(1);
-        sliderLabel.textContent = `Day ${day}/${SYNODIC.toFixed(1)}`;
+    function angArcminFromDistKm(distKm) {
+      if (!(distKm > 0)) return NaN;
+      return (2 * Math.atan(MOON_RADIUS_KM / distKm) * 180) / Math.PI * 60;
+    }
+
+    function yearMaxAngular(A, when) {
+      const yr = when.getFullYear();
+      if (yearMaxCache && yearMaxCache.yr === yr) return yearMaxCache.maxAng;
+      try {
+        const start = new Date(Date.UTC(yr, 0, 1));
+        const end = new Date(Date.UTC(yr + 1, 0, 1));
+        let apsis = A.SearchLunarApsis(start);
+        let minDistAu = Infinity;
+        for (let i = 0; i < 30; i++) {
+          if (apsis.time.date >= end) break;
+          // kind 0 = perigee (closest)
+          if (apsis.kind === 0 || apsis.kind === "Pericenter") {
+            minDistAu = Math.min(minDistAu, apsis.dist_au);
+          }
+          apsis = A.NextLunarApsis(apsis);
+        }
+        if (!Number.isFinite(minDistAu) || minDistAu <= 0) {
+          yearMaxCache = { yr, maxAng: AVG_ANG_ARCMIN * 1.08 };
+          return yearMaxCache.maxAng;
+        }
+        const maxAng = angArcminFromDistKm(minDistAu * A.KM_PER_AU);
+        yearMaxCache = { yr, maxAng };
+        return maxAng;
+      } catch (_) {
+        return AVG_ANG_ARCMIN * 1.08;
       }
     }
 
-    function showLoc(lat, lon, source) {
+    function computeMetrics(info) {
+      const A = globalThis.Astronomy;
+      if (!A || !info) return null;
+      const when = info.when instanceof Date ? info.when : new Date(info.when);
+      const lat = Number(info.lat);
+      const lon = Number(info.lon);
+      const phase01 = Number(info.phase01) || 0;
+      const frac = Number(info.fraction);
+
+      let distKm = NaN;
+      let ang = NaN;
+      try {
+        const illum = A.Illumination(A.Body.Moon, when);
+        distKm = illum.geo_dist * A.KM_PER_AU;
+        ang = angArcminFromDistKm(distKm);
+      } catch (_) {}
+
+      let daysToFull = NaN;
+      try {
+        const full = A.SearchMoonPhase(180, when, 40);
+        if (full) {
+          daysToFull = (full.date.getTime() - when.getTime()) / 86400000;
+          if (daysToFull < 0) daysToFull += SYNODIC;
+        }
+      } catch (_) {}
+
+      let rise = null;
+      let set = null;
+      try {
+        if (Number.isFinite(lat) && Number.isFinite(lon)) {
+          const obs = new A.Observer(lat, lon, 0);
+          // +1 rise, −1 set; search window 1 day
+          const dayStart = new Date(when);
+          dayStart.setHours(0, 0, 0, 0);
+          rise = A.SearchRiseSet(A.Body.Moon, obs, +1, dayStart, 1);
+          set = A.SearchRiseSet(A.Body.Moon, obs, -1, dayStart, 1);
+        }
+      } catch (_) {}
+
+      const vsAvg = Number.isFinite(ang)
+        ? ((ang - AVG_ANG_ARCMIN) / AVG_ANG_ARCMIN) * 100
+        : NaN;
+      const maxAng = yearMaxAngular(A, when);
+      const vsMax = Number.isFinite(ang) && maxAng > 0 ? (ang / maxAng) * 100 : NaN;
+
+      return {
+        name: info.name || "—",
+        frac,
+        phase01,
+        cycleDay: phase01 * SYNODIC,
+        daysToFull,
+        distMi: distKm * MI_PER_KM,
+        ang,
+        vsAvg,
+        vsMax,
+        rise: rise ? rise.date : null,
+        set: set ? set.date : null,
+        when,
+      };
+    }
+
+    function paintMetrics(info) {
+      const m = computeMetrics(info);
+      if (!m) return;
+
+      el.phase.textContent = m.name;
+      el.illum.textContent = Number.isFinite(m.frac)
+        ? `${Math.round(m.frac * 100)}%`
+        : "—";
+      el.cycle.textContent = `${m.cycleDay.toFixed(1)}/${SYNODIC.toFixed(1)}`;
+      el.tofull.textContent = Number.isFinite(m.daysToFull)
+        ? `${m.daysToFull.toFixed(1)}d`
+        : "—";
+      el.dist.textContent = Number.isFinite(m.distMi)
+        ? `${Math.round(m.distMi).toLocaleString()} mi`
+        : "—";
+      el.ang.textContent = Number.isFinite(m.ang) ? `${m.ang.toFixed(1)}′` : "—";
+      if (Number.isFinite(m.vsAvg)) {
+        const s = m.vsAvg >= 0 ? "+" : "";
+        el.vsavg.textContent = `${s}${m.vsAvg.toFixed(0)}%`;
+      } else {
+        el.vsavg.textContent = "—";
+      }
+      el.vsmax.textContent = Number.isFinite(m.vsMax)
+        ? `${m.vsMax.toFixed(0)}% · yr`
+        : "—";
+      el.htide.textContent = "—";
+      el.ltide.textContent = "—";
+      el.rise.textContent = fmtTime(m.rise);
+      el.set.textContent = fmtTime(m.set);
+
+      const dayStr = m.cycleDay.toFixed(1);
+      sliderEndsMid.textContent = `day ${dayStr} / ${SYNODIC.toFixed(1)}`;
+
+      if (previewMode) {
+        cycleDate.innerHTML = `${fmtDateTime(m.when)}<span class="live-tag">Preview</span>`;
+      } else {
+        cycleDate.innerHTML = `${fmtDateTime(m.when)}<span class="live-tag">Live · v70</span>`;
+      }
+    }
+
+    function showPhase(info) {
+      if (!info) return;
+      if (metricsRaf) cancelAnimationFrame(metricsRaf);
+      metricsRaf = requestAnimationFrame(() => {
+        metricsRaf = 0;
+        paintMetrics(info);
+      });
+    }
+
+    function showLoc(lat, lon) {
       latInput.value = Number(lat).toFixed(4);
       lonInput.value = Number(lon).toFixed(4);
-      const where = `${fmtCoord(lat, "N", "S")} ${fmtCoord(lon, "E", "W")}`;
-      const tag = source === "gps" ? "GPS" : source === "saved" ? "Saved" : source === "manual" ? "Manual" : source === "hemi" ? "Hemi test" : "Default";
-      locMeta.textContent = `${tag} · ${where}`;
+      locCoords.textContent = `${fmtCoord(lat, "N", "S")} · ${fmtCoord(lon, "E", "W")}`;
       const south = Number(lat) < 0;
       hemiN.classList.toggle("active", !south);
       hemiS.classList.toggle("active", south);
     }
 
-    /** Flip lat sign, keep |lat| and lon — quick N/S compare. */
     function setHemisphere(southern) {
       const latAbs = Math.abs(Number(latInput.value) || 35);
       const lon = Number(lonInput.value) || 0;
@@ -451,16 +784,16 @@
       liveBtn.classList.toggle("is-preview", previewMode);
       liveBtn.classList.toggle("is-live", !previewMode);
       liveBtn.textContent = previewMode ? "Use live" : "Live";
-      if (!previewMode) sliderLabel.textContent = "Live · v69";
     }
 
     function goLive() {
       previewMode = false;
       sliderAnchorDate = null;
+      editPanel.classList.remove("is-open");
+      editPanel.hidden = true;
       const now = new Date();
       const p = livePhase01(now);
       phaseSlider.value = String(Math.round(p * 1000));
-      // Live moon for this location: ephemeris pose + default camera (near side from Earth)
       globe.setTime(now, { lockOrient: false });
       globe.resetView();
       showPhase(globe.getPhaseInfo());
@@ -471,7 +804,7 @@
       if (sliderAnchorDate) return;
       const now = new Date();
       sliderAnchorDate = previewMode
-        ? (globe.getPhaseInfo()?.when || now)
+        ? globe.getPhaseInfo()?.when || now
         : now;
       sliderAnchorPhase = previewMode
         ? Number(phaseSlider.value) / 1000
@@ -484,7 +817,8 @@
         status.textContent = "Surface 2K · sharpening…";
       },
       onQuality(level) {
-        status.textContent = level === "8k" ? "Surface 8K" : `Surface ${level.toUpperCase()}`;
+        status.textContent =
+          level === "8k" ? "Surface 8K" : `Surface ${level.toUpperCase()}`;
         if (level === "8k") {
           setTimeout(() => {
             status.style.opacity = "0.4";
@@ -501,13 +835,12 @@
       } else {
         const phase = Number(phaseSlider.value) / 1000;
         ensureSliderAnchor();
-        // Keep scrub calm; setObserver already refreshed frozen pose for new place
         globe.setTime(
           dateFromPhaseOffset(sliderAnchorDate, sliderAnchorPhase, phase),
           { lockOrient: true, orientDate: new Date() }
         );
       }
-      showLoc(lat, lon, source);
+      showLoc(lat, lon);
       showPhase(globe.getPhaseInfo());
       saveLoc(lat, lon, source);
     }
@@ -525,11 +858,14 @@
       previewMode = true;
       setLiveUI();
       const phase = Number(phaseSlider.value) / 1000;
-      const date = dateFromPhaseOffset(sliderAnchorDate, sliderAnchorPhase, phase);
+      const date = dateFromPhaseOffset(
+        sliderAnchorDate,
+        sliderAnchorPhase,
+        phase
+      );
       if (previewRaf) cancelAnimationFrame(previewRaf);
       previewRaf = requestAnimationFrame(() => {
         previewRaf = 0;
-        // Freeze sky pose on first scrub tick; only terminator walks the cycle
         globe.setTime(date, { lockOrient: true, orientDate: new Date() });
         showPhase(globe.getPhaseInfo());
       });
@@ -539,37 +875,48 @@
     hemiN.addEventListener("click", () => setHemisphere(false));
     hemiS.addEventListener("click", () => setHemisphere(true));
 
+    editBtn.addEventListener("click", () => {
+      const open = !editPanel.classList.contains("is-open");
+      editPanel.classList.toggle("is-open", open);
+      editPanel.hidden = !open;
+      if (open) latInput.focus();
+    });
+
     applyBtn.addEventListener("click", () => {
       const lat = Number(latInput.value);
       const lon = Number(lonInput.value);
       if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
-        locMeta.textContent = "Enter valid lat / lon";
+        locCoords.textContent = "Invalid lat / lon";
         return;
       }
       applyLocation(lat, lon, "manual");
+      editPanel.classList.remove("is-open");
+      editPanel.hidden = true;
     });
 
     geoBtn.addEventListener("click", () => {
       if (!navigator.geolocation) {
-        locMeta.textContent = "Geolocation not available";
+        locCoords.textContent = "GPS unavailable";
         return;
       }
-      locMeta.textContent = "Locating…";
+      locCoords.textContent = "Locating…";
       geoBtn.disabled = true;
       navigator.geolocation.getCurrentPosition(
         (pos) => {
           geoBtn.disabled = false;
           applyLocation(pos.coords.latitude, pos.coords.longitude, "gps");
+          editPanel.classList.remove("is-open");
+          editPanel.hidden = true;
         },
         (err) => {
           geoBtn.disabled = false;
-          locMeta.textContent = err.code === 1 ? "Location permission denied" : "Location failed";
+          locCoords.textContent =
+            err.code === 1 ? "Permission denied" : "Location failed";
         },
         { enableHighAccuracy: false, timeout: 12000, maximumAge: 300000 }
       );
     });
 
-    // Boot location: saved → GPS attempt → equator default
     const saved = loadSavedLoc();
     if (saved) {
       applyLocation(saved.lat, saved.lon, "saved");
@@ -578,16 +925,15 @@
     }
     goLive();
 
-    // Auto-locate once if nothing saved
     if (!saved && navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
-        (pos) => applyLocation(pos.coords.latitude, pos.coords.longitude, "gps"),
+        (pos) =>
+          applyLocation(pos.coords.latitude, pos.coords.longitude, "gps"),
         () => {},
         { enableHighAccuracy: false, timeout: 8000, maximumAge: 600000 }
       );
     }
 
-    // Keep phase live (only when not scrubbing)
     setInterval(() => {
       if (previewMode) return;
       globe.setTime(new Date(), { lockOrient: false });
