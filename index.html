@@ -291,20 +291,13 @@
       box-sizing: border-box;
     }
 
-    .loc-card-place {
-      flex-direction: column;
-      align-items: stretch;
-      justify-content: center;
-      gap: 3px;
-      padding: 3px 0.3rem 4px;
-    }
-
+    .loc-card-place,
     .loc-card.hemi-card {
       flex-direction: column;
       align-items: stretch;
       justify-content: center;
       gap: 3px;
-      padding: 3px 0.3rem 4px;
+      padding: 3px 0.35rem 4px;
     }
 
     .loc-label,
@@ -315,24 +308,28 @@
       text-transform: uppercase;
       color: var(--dim);
       line-height: 1.05;
-      text-align: center;
+      text-align: left;
       margin: 0;
+    }
+
+    .hemi-label {
+      text-align: center;
     }
 
     .loc-place-row {
       display: flex;
       align-items: center;
-      gap: 0.25rem;
+      gap: 0.3rem;
       min-width: 0;
-      flex: 1 1 auto;
+      width: 100%;
     }
 
     .loc-coords {
       font-family: var(--mono);
-      font-size: 9.5px;
+      font-size: 10px;
       font-weight: 600;
       letter-spacing: -0.02em;
-      line-height: 1.05;
+      line-height: 1.15;
       flex: 1 1 auto;
       min-width: 0;
       white-space: nowrap;
@@ -341,22 +338,29 @@
       color: var(--text);
     }
 
+    /* Square control matching Edit height — maps “my location” */
     .geo-btn {
       flex: 0 0 auto;
-      width: 1.55rem;
-      height: 1.55rem;
+      width: 1.65rem;
+      height: 1.45rem;
+      min-width: 1.65rem;
       padding: 0 !important;
-      display: inline-flex;
+      display: inline-flex !important;
       align-items: center;
       justify-content: center;
       border-radius: 6px;
+      line-height: 0;
     }
 
     .geo-btn svg {
-      width: 14px;
-      height: 14px;
+      width: 15px;
+      height: 15px;
       display: block;
-      fill: currentColor;
+      stroke: currentColor;
+      fill: none;
+      stroke-width: 1.75;
+      stroke-linecap: round;
+      stroke-linejoin: round;
     }
 
     .hemi {
@@ -848,10 +852,26 @@
     </div>
 
     <div class="loc-strip">
-      <div class="loc-card">
-        <div class="loc-coords" id="loc-coords">—</div>
-        <button type="button" id="edit-btn" title="Choose location on map">Edit</button>
-        <button type="button" id="geo-btn" title="Use device location">Current</button>
+      <div class="loc-card loc-card-place">
+        <div class="loc-label">Current location</div>
+        <div class="loc-place-row">
+          <div class="loc-coords" id="loc-coords">—</div>
+          <button type="button" id="edit-btn" title="Choose location on map">Edit</button>
+          <button
+            type="button"
+            class="geo-btn"
+            id="geo-btn"
+            title="Use device location"
+            aria-label="Use device location"
+          >
+            <!-- Classic maps locate-me crosshair -->
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <circle cx="12" cy="12" r="3" />
+              <circle cx="12" cy="12" r="8" />
+              <path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22" />
+            </svg>
+          </button>
+        </div>
       </div>
       <div class="loc-card hemi-card">
         <span class="hemi-label">Hemisphere</span>
@@ -902,7 +922,7 @@
   <script src="astronomy.js"></script>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
   <script type="module">
-    import { createMoonGlobe } from "./moon.js?v=92";
+    import { createMoonGlobe } from "./moon.js?v=94";
 
     const STORAGE_KEY = "moon-globe-loc-v1";
     const TIDE_STATIONS_KEY = "supermoon-noaa-tide-stations-v5";
@@ -1454,7 +1474,7 @@
       if (previewMode) {
         cycleDate.innerHTML = `${fmtDateTime(m.when)}<span class="live-tag">Preview</span>`;
       } else {
-        cycleDate.innerHTML = `${fmtDateTime(m.when)}<span class="live-tag">Live · v92</span>`;
+        cycleDate.innerHTML = `${fmtDateTime(m.when)}<span class="live-tag">Live · v94</span>`;
       }
 
       // Always nearest NOAA prediction station for observer lat/lon
