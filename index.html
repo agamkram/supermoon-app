@@ -404,40 +404,89 @@
       text-shadow: 0 1px 8px rgba(0, 0, 0, 0.65);
     }
 
-    /* Night-vision red (~650 nm feel) — tap moon to enter, tap screen to exit */
-    .red-mode {
+    /*
+     * Night vision: kill white / bright UI so dark-adapted eyes survive.
+     * App stays fully usable. Tap moon (or the badge) to toggle.
+     */
+    body.is-red-mode {
+      --text: #e07070;
+      --muted: #a04040;
+      --dim: #803030;
+      --faint: #5a2020;
+      --cell: #140606;
+      --line: #4a1818;
+      --moon: #ff8a8a;
+      --panel: rgba(20, 4, 4, 0.88);
+      background: #050000;
+      color: var(--text);
+    }
+
+    body.is-red-mode #moon-host,
+    body.is-red-mode #stage {
+      background: #050000;
+    }
+
+    /* Soft red cast on the globe so it isn’t grey-white bright */
+    body.is-red-mode #moon-host {
+      filter: sepia(1) hue-rotate(-52deg) saturate(3.2) brightness(0.62);
+    }
+
+    body.is-red-mode .loc-bar {
+      background: linear-gradient(
+        to top,
+        rgba(5, 0, 0, 0.97) 70%,
+        rgba(5, 0, 0, 0.55) 100%
+      );
+    }
+
+    body.is-red-mode .live-btn,
+    body.is-red-mode .loc-card button,
+    body.is-red-mode .hemi button,
+    body.is-red-mode .edit-panel button,
+    body.is-red-mode .edit-panel input {
+      background: rgba(80, 10, 10, 0.35);
+      border-color: #5a2020;
+      color: var(--text);
+      accent-color: #c04040;
+    }
+
+    body.is-red-mode .hemi button.active,
+    body.is-red-mode .live-btn.is-preview {
+      background: rgba(120, 20, 20, 0.45);
+      border-color: #803030;
+    }
+
+    body.is-red-mode #phase-slider {
+      accent-color: #c04040;
+    }
+
+    body.is-red-mode .app-title {
+      color: #e07070;
+      text-shadow: 0 1px 12px rgba(80, 0, 0, 0.6);
+    }
+
+    .red-badge {
       position: fixed;
-      inset: 0;
-      z-index: 200;
-      background: #1a0000;
-      display: flex;
-      align-items: flex-end;
-      justify-content: center;
-      padding:
-        env(safe-area-inset-top)
-        env(safe-area-inset-right)
-        max(1rem, env(safe-area-inset-bottom))
-        env(safe-area-inset-left);
-      cursor: pointer;
-      touch-action: manipulation;
-      -webkit-tap-highlight-color: transparent;
-    }
-
-    .red-mode[hidden] {
-      display: none !important;
-    }
-
-    .red-mode-hint {
-      margin: 0 0 0.5rem;
+      z-index: 20;
+      top: max(0.35rem, env(safe-area-inset-top));
+      right: max(0.4rem, env(safe-area-inset-right));
+      border: 1px solid #5a2020;
+      border-radius: 999px;
+      background: rgba(20, 4, 4, 0.85);
+      color: #c05050;
       font-family: "DM Sans", system-ui, sans-serif;
-      font-size: 10px;
+      font-size: 8px;
       font-weight: 600;
-      letter-spacing: 0.1em;
+      letter-spacing: 0.08em;
       text-transform: uppercase;
-      color: #4a0000;
-      text-align: center;
-      pointer-events: none;
-      user-select: none;
+      padding: 0.22rem 0.5rem;
+      cursor: pointer;
+      pointer-events: auto;
+      touch-action: manipulation;
+    }
+
+    .red-badge[hidden] {
+      display: none !important;
     }
   </style>
   <script type="importmap">
@@ -460,16 +509,16 @@
     <div id="touch-plane" aria-hidden="true"></div>
   </div>
 
-  <div
-    id="red-mode"
-    class="red-mode"
+  <button
+    type="button"
+    id="red-badge"
+    class="red-badge"
     hidden
-    role="button"
-    tabindex="0"
-    aria-label="Night vision red. Tap to exit."
+    title="Exit night vision"
+    aria-label="Night vision on. Tap to exit."
   >
-    <p class="red-mode-hint">Tap to exit · night red</p>
-  </div>
+    Night red · tap to exit
+  </button>
 
   <header class="chrome">
     <h1 class="app-title">SuperMoon</h1>
@@ -584,7 +633,7 @@
 
   <script src="astronomy.js"></script>
   <script type="module">
-    import { createMoonGlobe } from "./moon.js?v=77";
+    import { createMoonGlobe } from "./moon.js?v=78";
 
     const STORAGE_KEY = "moon-globe-loc-v1";
     const TIDE_STATIONS_KEY = "supermoon-noaa-tide-stations-v4";
@@ -1025,7 +1074,7 @@
       if (previewMode) {
         cycleDate.innerHTML = `${fmtDateTime(m.when)}<span class="live-tag">Preview</span>`;
       } else {
-        cycleDate.innerHTML = `${fmtDateTime(m.when)}<span class="live-tag">Live · v77</span>`;
+        cycleDate.innerHTML = `${fmtDateTime(m.when)}<span class="live-tag">Live · v78</span>`;
       }
 
       // Always nearest NOAA prediction station for observer lat/lon
@@ -1089,28 +1138,28 @@
         : livePhase01(sliderAnchorDate);
     }
 
-    const redMode = document.getElementById("red-mode");
+    const redBadge = document.getElementById("red-badge");
+    let redModeOn = false;
 
     function setRedMode(on) {
-      const active = !!on;
-      redMode.hidden = !active;
-      redMode.setAttribute("aria-hidden", active ? "false" : "true");
-      document.body.classList.toggle("is-red-mode", active);
+      redModeOn = !!on;
+      document.body.classList.toggle("is-red-mode", redModeOn);
+      redBadge.hidden = !redModeOn;
+      redBadge.setAttribute("aria-pressed", redModeOn ? "true" : "false");
     }
 
     function toggleRedMode() {
-      setRedMode(redMode.hidden);
+      setRedMode(!redModeOn);
     }
 
-    redMode.addEventListener("click", (e) => {
+    redBadge.addEventListener("click", (e) => {
       e.preventDefault();
+      e.stopPropagation();
       setRedMode(false);
     });
-    redMode.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" || e.key === " " || e.key === "Escape") {
-        e.preventDefault();
-        setRedMode(false);
-      }
+
+    window.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && redModeOn) setRedMode(false);
     });
 
     const globe = createMoonGlobe(canvas, {
