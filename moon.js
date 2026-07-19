@@ -86,13 +86,7 @@ export function createMoonGlobe(canvas, options = {}) {
     alpha: false,
     powerPreference: "high-performance",
   });
-  const isCoarse =
-    typeof window !== "undefined" &&
-    window.matchMedia("(pointer: coarse)").matches;
-  // Cap DPR hard on phones — large buffers + 8K maps OOM Safari
-  renderer.setPixelRatio(
-    Math.min(window.devicePixelRatio || 1, isCoarse ? 1.5 : 2)
-  );
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2.5));
   renderer.setClearColor(0x020308, 1);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -227,10 +221,7 @@ export function createMoonGlobe(canvas, options = {}) {
       if (typeof onQuality === "function") onQuality("2k");
       if (!hqStarted) {
         hqStarted = true;
-        // Delay HQ; skip 8K on coarse pointers (phones) — was crashing Safari
-        const delay = isCoarse ? 0 : 600;
-        if (!isCoarse) setTimeout(() => upgradeHigh(), delay);
-        else if (typeof onQuality === "function") onQuality("2k-phone");
+        setTimeout(() => upgradeHigh(), 400);
       }
     });
     const normal = loader.load(cfg.normal, configureNormal);
@@ -240,7 +231,7 @@ export function createMoonGlobe(canvas, options = {}) {
   }
 
   function upgradeHigh() {
-    if (disposed || isCoarse) return;
+    if (disposed) return;
     const cfg = LOD.high;
     let mapDone = null;
     let normalDone = null;
@@ -580,17 +571,7 @@ export function createMoonGlobe(canvas, options = {}) {
     camera.aspect = bufferW / bufferH;
     camera.updateProjectionMatrix();
 
-    renderer.setPixelRatio(
-      Math.min(window.devicePixelRatio || 1, isCoarse ? 1.5 : 2)
-    );
-    // Cap absolute buffer size (~4M CSS px) so phones don't OOM
-    const maxDim = isCoarse ? 1600 : 2400;
-    if (bufferW > maxDim || bufferH > maxDim) {
-      const s = maxDim / Math.max(bufferW, bufferH);
-      bufferW = Math.max(w, Math.floor(bufferW * s));
-      bufferH = Math.max(h, Math.floor(bufferH * s));
-      panMarginPx = Math.floor(Math.min(bufferW - w, bufferH - h) / 2);
-    }
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2.5));
     renderer.setSize(bufferW, bufferH, false);
 
     canvas.style.position = "absolute";
