@@ -567,7 +567,14 @@ export function createMoonGlobe(canvas, options = {}) {
 
     width = w;
     height = h;
-    panMarginPx = Math.ceil(Math.max(w, h) * PAN_MARGIN);
+    // Base pan buffer for 2fs. Also must cover home CSS lift (moon sits high so
+    // bottom of host stays filled — otherwise a black strip clips the moon).
+    const pads = readHomePadsPx();
+    const homeLift = Math.abs(pads.top - pads.bottom) / 2;
+    panMarginPx = Math.max(
+      Math.ceil(Math.max(w, h) * PAN_MARGIN),
+      Math.ceil(homeLift + 48)
+    );
     bufferW = w + 2 * panMarginPx;
     bufferH = h + 2 * panMarginPx;
 
@@ -597,9 +604,22 @@ export function createMoonGlobe(canvas, options = {}) {
   }
 
   function fitToHost() {
-    const w = window.innerWidth || document.documentElement.clientWidth;
-    const h = window.innerHeight || document.documentElement.clientHeight;
-    resize(w, h);
+    // Size to the real clip host so the canvas always fills edge-to-edge
+    // (window.innerHeight can be short of the fixed host on iOS).
+    const host = canvas.parentElement;
+    let w = window.innerWidth || document.documentElement.clientWidth || 1;
+    let h = window.innerHeight || document.documentElement.clientHeight || 1;
+    if (host) {
+      const rect = host.getBoundingClientRect();
+      if (rect.width > 0) w = rect.width;
+      if (rect.height > 0) h = rect.height;
+    }
+    const vv = window.visualViewport;
+    if (vv) {
+      w = Math.max(w, vv.width || 0);
+      h = Math.max(h, vv.height || 0);
+    }
+    resize(Math.max(1, Math.round(w)), Math.max(1, Math.round(h)));
   }
 
   function resetView() {
