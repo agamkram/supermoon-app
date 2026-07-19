@@ -18,6 +18,7 @@
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&family=IBM+Plex+Mono:wght@500;600&family=Michroma&display=swap" rel="stylesheet" />
   <link rel="preconnect" href="https://unpkg.com" crossorigin />
   <link rel="modulepreload" href="https://unpkg.com/three@0.160.0/build/three.module.js" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
   <style>
     :root {
       color-scheme: dark;
@@ -333,41 +334,136 @@
       border-color: rgba(255, 255, 255, 0.28);
     }
 
-    .edit-panel {
-      display: none;
-      grid-template-columns: 1fr 1fr auto;
-      gap: 2px;
-      background: var(--cell);
-      border: 1px solid var(--line);
-      border-radius: 6px;
-      padding: 0.15rem;
+    /* Hidden lat/lon still updated for hemi flip / storage */
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
     }
 
-    .edit-panel.is-open { display: grid; }
-
-    .edit-panel input {
+    /* Map location picker (Edit) */
+    .loc-dialog {
+      position: fixed;
+      inset: 0;
+      z-index: 300;
+      margin: 0;
+      padding: 0;
+      max-width: none;
+      max-height: none;
       width: 100%;
-      min-width: 0;
+      height: 100%;
+      border: none;
+      background: rgba(2, 3, 8, 0.72);
+      color: var(--text);
+    }
+
+    .loc-dialog[hidden] {
+      display: none !important;
+    }
+
+    .loc-dialog-sheet {
+      position: absolute;
+      left: 50%;
+      bottom: 0;
+      transform: translateX(-50%);
+      width: min(430px, 100%);
+      max-height: min(78vh, 560px);
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      background: #0a0e16;
+      border: 1px solid var(--line);
+      border-bottom: none;
+      border-radius: 12px 12px 0 0;
+      overflow: hidden;
+      padding-bottom: max(0.4rem, env(safe-area-inset-bottom));
+      box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.55);
+      pointer-events: auto;
+    }
+
+    .loc-dialog-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.5rem;
+      padding: 0.45rem 0.55rem;
+      border-bottom: 1px solid var(--line);
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--dim);
+    }
+
+    .loc-dialog-head button,
+    .loc-dialog-foot button {
       border: 1px solid var(--line);
       border-radius: 6px;
-      background: rgba(0, 0, 0, 0.35);
+      background: rgba(255, 255, 255, 0.06);
       color: var(--text);
+      font-family: "DM Sans", system-ui, sans-serif;
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      padding: 0.28rem 0.55rem;
+      cursor: pointer;
+      pointer-events: auto;
+      touch-action: manipulation;
+    }
+
+    .loc-dialog-foot button.primary {
+      background: rgba(255, 255, 255, 0.12);
+      border-color: rgba(255, 255, 255, 0.22);
+    }
+
+    .loc-map {
+      height: min(48vh, 340px);
+      width: 100%;
+      background: #12161e;
+      z-index: 0;
+      touch-action: none;
+    }
+
+    .loc-dialog-foot {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.5rem;
+      padding: 0.4rem 0.55rem 0.15rem;
+    }
+
+    .loc-map-coords {
       font-family: var(--mono);
       font-size: 11px;
-      padding: 0.2rem 0.28rem;
+      font-weight: 600;
+      color: var(--text);
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
 
-    .edit-panel button {
-      border: 1px solid var(--line);
-      border-radius: 6px;
-      background: rgba(255, 255, 255, 0.08);
+    body.is-red-mode .loc-dialog {
+      background: rgba(2, 0, 0, 0.8);
+    }
+
+    body.is-red-mode .loc-dialog-sheet {
+      background: #0a0000;
+      border-color: #3a0c0c;
+    }
+
+    body.is-red-mode .loc-dialog-head button,
+    body.is-red-mode .loc-dialog-foot button {
+      background: rgba(40, 4, 4, 0.55);
+      border-color: #3a0c0c;
       color: var(--text);
-      font-size: 9px;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.04em;
-      padding: 0.2rem 0.4rem;
-      cursor: pointer;
     }
 
     .cycle {
@@ -660,7 +756,7 @@
     <div class="loc-strip">
       <div class="loc-card">
         <div class="loc-coords" id="loc-coords">—</div>
-        <button type="button" id="edit-btn" title="Edit coordinates">Edit</button>
+        <button type="button" id="edit-btn" title="Choose location on map">Edit</button>
         <button type="button" id="geo-btn" title="Use device location">Current</button>
       </div>
       <div class="loc-card hemi-card">
@@ -672,10 +768,22 @@
       </div>
     </div>
 
-    <div class="edit-panel" id="edit-panel" hidden>
-      <input id="lat-input" type="number" inputmode="decimal" step="0.0001" min="-90" max="90" value="0" aria-label="Latitude" />
-      <input id="lon-input" type="number" inputmode="decimal" step="0.0001" min="-180" max="180" value="0" aria-label="Longitude" />
-      <button type="button" id="apply-loc" title="Apply coordinates">Go</button>
+    <!-- Kept for hemi flip / applyLocation; not shown -->
+    <input id="lat-input" class="sr-only" type="number" step="0.0001" min="-90" max="90" value="0" tabindex="-1" aria-hidden="true" />
+    <input id="lon-input" class="sr-only" type="number" step="0.0001" min="-180" max="180" value="0" tabindex="-1" aria-hidden="true" />
+
+    <div id="loc-dialog" class="loc-dialog" hidden role="dialog" aria-modal="true" aria-label="Choose location on map">
+      <div class="loc-dialog-sheet">
+        <div class="loc-dialog-head">
+          <span>Tap map to set location</span>
+          <button type="button" id="loc-dialog-cancel">Cancel</button>
+        </div>
+        <div id="loc-map" class="loc-map" role="application" aria-label="Location map"></div>
+        <div class="loc-dialog-foot">
+          <span class="loc-map-coords" id="loc-map-coords">—</span>
+          <button type="button" class="primary" id="loc-dialog-use">Use this place</button>
+        </div>
+      </div>
     </div>
 
     <div class="cycle">
@@ -698,8 +806,9 @@
   </div>
 
   <script src="astronomy.js"></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
   <script type="module">
-    import { createMoonGlobe } from "./moon.js?v=86";
+    import { createMoonGlobe } from "./moon.js?v=87";
 
     const STORAGE_KEY = "moon-globe-loc-v1";
     const TIDE_STATIONS_KEY = "supermoon-noaa-tide-stations-v5";
@@ -725,14 +834,24 @@
     const lonInput = document.getElementById("lon-input");
     const locCoords = document.getElementById("loc-coords");
     const editBtn = document.getElementById("edit-btn");
-    const editPanel = document.getElementById("edit-panel");
     const geoBtn = document.getElementById("geo-btn");
-    const applyBtn = document.getElementById("apply-loc");
+    const locDialog = document.getElementById("loc-dialog");
+    const locMapEl = document.getElementById("loc-map");
+    const locMapCoords = document.getElementById("loc-map-coords");
+    const locDialogCancel = document.getElementById("loc-dialog-cancel");
+    const locDialogUse = document.getElementById("loc-dialog-use");
     const phaseSlider = document.getElementById("phase-slider");
     const cycleDate = document.getElementById("cycle-date");
     const liveBtn = document.getElementById("live-btn");
     const hemiN = document.getElementById("hemi-n");
     const hemiS = document.getElementById("hemi-s");
+
+    /** @type {import("leaflet").Map | null} */
+    let locationMap = null;
+    /** @type {import("leaflet").Marker | null} */
+    let locationMarker = null;
+    let pickLat = 0;
+    let pickLon = 0;
 
     const el = {
       phase: document.getElementById("m-phase"),
@@ -1238,7 +1357,7 @@
       if (previewMode) {
         cycleDate.innerHTML = `${fmtDateTime(m.when)}<span class="live-tag">Preview</span>`;
       } else {
-        cycleDate.innerHTML = `${fmtDateTime(m.when)}<span class="live-tag">Live · v86</span>`;
+        cycleDate.innerHTML = `${fmtDateTime(m.when)}<span class="live-tag">Live · v87</span>`;
       }
 
       // Always nearest NOAA prediction station for observer lat/lon
@@ -1326,7 +1445,12 @@
     });
 
     window.addEventListener("keydown", (e) => {
-      if (e.key === "Escape" && redModeOn) setRedMode(false);
+      if (e.key !== "Escape") return;
+      if (!locDialog.hidden) {
+        closeLocationDialog();
+        return;
+      }
+      if (redModeOn) setRedMode(false);
     });
 
     const globe = createMoonGlobe(canvas, {
@@ -1388,28 +1512,83 @@
     hemiN.addEventListener("click", () => setHemisphere(false));
     hemiS.addEventListener("click", () => setHemisphere(true));
 
-    editBtn.addEventListener("click", () => {
-      const open = !editPanel.classList.contains("is-open");
-      editPanel.classList.toggle("is-open", open);
-      editPanel.hidden = !open;
-      if (open) latInput.focus();
-    });
+    function updateMapCoordsDisplay() {
+      locMapCoords.textContent = `${fmtCoord(pickLat, "N", "S")} · ${fmtCoord(pickLon, "E", "W")}`;
+    }
 
-    applyBtn.addEventListener("click", () => {
-      const lat = Number(latInput.value);
-      const lon = Number(lonInput.value);
-      if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
-        locCoords.textContent = "Invalid lat / lon";
-        return;
+    function setMapPin(lat, lon, pan = false) {
+      pickLat = lat;
+      pickLon = lon;
+      updateMapCoordsDisplay();
+      if (!locationMap || typeof L === "undefined") return;
+      if (!locationMarker) {
+        locationMarker = L.marker([lat, lon], { draggable: true }).addTo(
+          locationMap
+        );
+        locationMarker.on("dragend", () => {
+          const p = locationMarker.getLatLng();
+          setMapPin(p.lat, p.lng);
+        });
+      } else {
+        locationMarker.setLatLng([lat, lon]);
       }
-      applyLocation(lat, lon, "manual");
-      editPanel.classList.remove("is-open");
-      editPanel.hidden = true;
+      if (pan) locationMap.setView([lat, lon], locationMap.getZoom());
+    }
+
+    function initLocationMap() {
+      if (locationMap || typeof L === "undefined") return;
+      locationMap = L.map(locMapEl, {
+        zoomControl: true,
+        attributionControl: true,
+      });
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        maxZoom: 19,
+        attribution: "&copy; OpenStreetMap",
+      }).addTo(locationMap);
+      locationMap.on("click", (e) => setMapPin(e.latlng.lat, e.latlng.lng));
+    }
+
+    function closeLocationDialog() {
+      locDialog.hidden = true;
+    }
+
+    function openLocationDialog() {
+      const startLat = Number(latInput.value);
+      const startLon = Number(lonInput.value);
+      pickLat = Number.isFinite(startLat) ? startLat : 0;
+      pickLon = Number.isFinite(startLon) ? startLon : 0;
+      locDialog.hidden = false;
+      requestAnimationFrame(() => {
+        initLocationMap();
+        if (!locationMap) return;
+        const hasLoc =
+          Number.isFinite(startLat) &&
+          Number.isFinite(startLon) &&
+          !(startLat === 0 && startLon === 0);
+        const zoom = hasLoc ? 10 : 3;
+        locationMap.setView([pickLat, pickLon], zoom);
+        setMapPin(pickLat, pickLon);
+        locationMap.invalidateSize();
+      });
+    }
+
+    editBtn.addEventListener("click", () => openLocationDialog());
+    locDialogCancel.addEventListener("click", () => closeLocationDialog());
+    locDialog.addEventListener("click", (e) => {
+      // Tap dimmed backdrop (not the sheet) closes
+      if (e.target === locDialog) closeLocationDialog();
+    });
+    locDialogUse.addEventListener("click", () => {
+      if (!Number.isFinite(pickLat) || !Number.isFinite(pickLon)) return;
+      applyLocation(pickLat, pickLon, "map");
+      closeLocationDialog();
+      if (!previewMode) goLive();
     });
 
     geoBtn.addEventListener("click", () => {
       if (!navigator.geolocation) {
         locCoords.textContent = "GPS unavailable";
+        openLocationDialog();
         return;
       }
       locCoords.textContent = "Locating…";
@@ -1418,13 +1597,12 @@
         (pos) => {
           geoBtn.disabled = false;
           applyLocation(pos.coords.latitude, pos.coords.longitude, "gps");
-          editPanel.classList.remove("is-open");
-          editPanel.hidden = true;
         },
         (err) => {
           geoBtn.disabled = false;
           locCoords.textContent =
             err.code === 1 ? "Permission denied" : "Location failed";
+          openLocationDialog();
         },
         { enableHighAccuracy: false, timeout: 12000, maximumAge: 300000 }
       );

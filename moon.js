@@ -651,7 +651,14 @@ export function createMoonGlobe(canvas, options = {}) {
   // —— Touch + pointer: 2fs pans the canvas (CSS) so movement is always visible ——
 
   function isFormControl(el) {
-    return !!(el && el.closest && el.closest("input,button,select,textarea,a,label"));
+    // Also ignore map picker / Leaflet so UI dialogs receive touch
+    return !!(
+      el &&
+      el.closest &&
+      el.closest(
+        "input,button,select,textarea,a,label,#loc-dialog,.leaflet-container,.loc-dialog"
+      )
+    );
   }
 
   function touchPair(list) {
