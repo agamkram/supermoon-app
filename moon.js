@@ -209,6 +209,10 @@ export function createMoonGlobe(canvas, options = {}) {
   let hqStarted = false;
   let disposed = false;
   let animId = 0;
+  let orbiting = false;
+  let lastOrbitMs = 0;
+  /** Slow spin: one full turn about every 100s — cheap (theta += dt). */
+  const ORBIT_RAD_PER_SEC = (2 * Math.PI) / 100;
   let width = 0; // CSS viewport width (window)
   let height = 0;
   let bufferW = 0; // drawing buffer / canvas CSS (includes pan margin)
@@ -1069,9 +1073,30 @@ export function createMoonGlobe(canvas, options = {}) {
   document.documentElement.style.touchAction = "none";
   document.body.style.touchAction = "none";
 
-  function animate() {
+  function setOrbiting(on) {
+    orbiting = !!on;
+    if (!orbiting) lastOrbitMs = 0;
+    return orbiting;
+  }
+
+  function isOrbiting() {
+    return orbiting;
+  }
+
+  function animate(now) {
     if (disposed) return;
     animId = requestAnimationFrame(animate);
+    if (orbiting) {
+      const t = typeof now === "number" ? now : performance.now();
+      if (!lastOrbitMs) lastOrbitMs = t;
+      const dt = Math.min(0.05, (t - lastOrbitMs) / 1000);
+      lastOrbitMs = t;
+      if (dt > 0) {
+        readSpherical();
+        spherical.theta -= ORBIT_RAD_PER_SEC * dt;
+        writeCamera();
+      }
+    }
     syncMoon();
     updateViewLighting();
     renderer.render(scene, camera);
@@ -1089,11 +1114,14 @@ export function createMoonGlobe(canvas, options = {}) {
     resetView,
     setObserver,
     setTime,
+    setOrbiting,
+    isOrbiting,
     getPhaseInfo,
     getObserver,
     isReady: () => ready,
     dispose() {
       disposed = true;
+      orbiting = false;
       cancelAnimationFrame(animId);
       window.removeEventListener("touchstart", onTouchStart, true);
       window.removeEventListener("touchmove", onTouchMove, true);
