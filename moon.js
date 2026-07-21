@@ -23,6 +23,99 @@ const PAN_MARGIN = 0.35;
 
 const NEAR_SIDE_Y = -Math.PI / 2;
 
+/** Starfield (ported from satellite-app) — fixed sphere behind the moon */
+const STAR_COUNT = 5000;
+const STAR_RADIUS = 55;
+
+function mulberry32(seed) {
+  return () => {
+    seed |= 0;
+    seed = (seed + 0x6d2b79f5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function buildStarfieldBuffers(count = STAR_COUNT, radius = STAR_RADIUS) {
+  const rand = mulberry32(42);
+  const positions = new Float32Array(count * 3);
+  const colors = new Float32Array(count * 3);
+  for (let i = 0; i < count; i++) {
+    const u = rand();
+    const v = rand();
+    const theta = 2 * Math.PI * u;
+    const phi = Math.acos(2 * v - 1);
+    const r = radius * (0.94 + rand() * 0.06);
+    const sinPhi = Math.sin(phi);
+    positions[i * 3] = r * sinPhi * Math.cos(theta);
+    positions[i * 3 + 1] = r * sinPhi * Math.sin(theta);
+    positions[i * 3 + 2] = r * Math.cos(phi);
+    const roll = rand();
+    const brightness = roll < 0.15 ? 1 : 0.88 + rand() * 0.12;
+    const tint = 0.94 + rand() * 0.06;
+    colors[i * 3] = brightness * tint;
+    colors[i * 3 + 1] = brightness * tint;
+    colors[i * 3 + 2] = brightness;
+  }
+  return { positions, colors };
+}
+
+function createStarPointTexture() {
+  const c = document.createElement("canvas");
+  c.width = 8;
+  c.height = 8;
+  const ctx = c.getContext("2d");
+  if (!ctx) return null;
+  ctx.clearRect(0, 0, 8, 8);
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(3, 3, 2, 2);
+  const tex = new THREE.CanvasTexture(c);
+  tex.magFilter = THREE.NearestFilter;
+  tex.minFilter = THREE.NearestFilter;
+  tex.needsUpdate = true;
+  return tex;
+}
+
+/** iPad / tablets — including iPadOS “desktop site” (fine pointer, but touch). */
+function isTabletDisplay() {
+  if (typeof window === "undefined") return false;
+  const minSide = Math.min(window.innerWidth || 0, window.innerHeight || 0);
+  if (minSide < 600) return false; // phones
+  const touch = (navigator.maxTouchPoints || 0) > 1;
+  const coarse = window.matchMedia("(pointer: coarse)").matches;
+  const noHover = window.matchMedia("(hover: none)").matches;
+  return touch || coarse || noHover;
+}
+
+function starPointSize() {
+  return isTabletDisplay() ? 7 : 3;
+}
+
+function createStarfield() {
+  const { positions, colors } = buildStarfieldBuffers();
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+  geo.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+  const map = createStarPointTexture();
+  const mat = new THREE.PointsMaterial({
+    color: 0xffffff,
+    size: starPointSize(),
+    sizeAttenuation: false,
+    vertexColors: true,
+    map: map || undefined,
+    transparent: true,
+    alphaTest: 0.01,
+    depthWrite: false,
+    toneMapped: false,
+  });
+  const points = new THREE.Points(geo, mat);
+  points.frustumCulled = false;
+  points.renderOrder = -10;
+  points.userData.starTexture = map;
+  return points;
+}
+
 const LOD = {
   low: { map: "moon-2k.jpg", normal: "moon-normal-2k.jpg", segments: 128, normalScale: 1.55 },
   high: { map: "moon-8k.jpg", normal: "moon-normal-4k.jpg", segments: 224, normalScale: 2.25 },
@@ -80,8 +173,15 @@ export function createMoonGlobe(canvas, options = {}) {
     (typeof document !== "undefined" && document.getElementById("touch-plane")) ||
     canvas;
 
+  // DPR = physical pixels per CSS pixel (iPhone ~3, iPad ~2, Retina Mac ~2).
+  // Phone/iPad use full device DPR (up to 3); Mac stays capped at 2.5.
+  const isTouch =
+    (navigator.maxTouchPoints || 0) > 0 ||
+    window.matchMedia("(pointer: coarse)").matches;
+  const maxPixelRatio = isTouch ? 3 : 2.5;
+
   const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(40, 1, 0.01, 80);
+  const camera = new THREE.PerspectiveCamera(40, 1, 0.01, 200);
   camera.position.set(0, 0, 3.2);
 
   const renderer = new THREE.WebGLRenderer({
@@ -90,11 +190,14 @@ export function createMoonGlobe(canvas, options = {}) {
     alpha: false,
     powerPreference: "high-performance",
   });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2.5));
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, maxPixelRatio));
   renderer.setClearColor(0x020308, 1);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.0;
+
+  const starfield = createStarfield();
+  scene.add(starfield);
 
   const moonGroup = new THREE.Group();
   scene.add(moonGroup);
@@ -408,15 +511,32 @@ export function createMoonGlobe(canvas, options = {}) {
     let top = 48;
     let bottom = 248;
     if (typeof document !== "undefined") {
-      const probe = document.createElement("div");
-      probe.style.cssText =
-        "position:absolute;visibility:hidden;pointer-events:none;width:0";
-      document.body.appendChild(probe);
-      probe.style.height = "calc(2rem + env(safe-area-inset-top, 0px))";
-      top = probe.offsetHeight || top;
-      probe.style.height = "calc(15.5rem + env(safe-area-inset-bottom, 0px))";
-      bottom = probe.offsetHeight || bottom;
-      probe.remove();
+      const bar = document.getElementById("loc-bar");
+      const chrome = document.querySelector(".chrome");
+      if (chrome) {
+        const h = chrome.getBoundingClientRect().height;
+        if (h > 0) top = Math.ceil(h);
+      } else {
+        const probe = document.createElement("div");
+        probe.style.cssText =
+          "position:absolute;visibility:hidden;pointer-events:none;width:0";
+        document.body.appendChild(probe);
+        probe.style.height = "calc(2rem + env(safe-area-inset-top, 0px))";
+        top = probe.offsetHeight || top;
+        probe.remove();
+      }
+      if (bar) {
+        const h = bar.getBoundingClientRect().height;
+        if (h > 0) bottom = Math.ceil(h);
+      } else {
+        const probe = document.createElement("div");
+        probe.style.cssText =
+          "position:absolute;visibility:hidden;pointer-events:none;width:0";
+        document.body.appendChild(probe);
+        probe.style.height = "15.5rem";
+        bottom = probe.offsetHeight || bottom;
+        probe.remove();
+      }
     }
     return { top, bottom };
   }
@@ -462,7 +582,7 @@ export function createMoonGlobe(canvas, options = {}) {
     const dist = spherical.radius;
     const frontGap = dist - RADIUS; // distance camera → front of disk
     camera.near = Math.max(0.001, frontGap * 0.35);
-    camera.far = Math.max(80, dist + 40);
+    camera.far = Math.max(200, dist + 40);
     camera.updateProjectionMatrix();
   }
 
@@ -489,12 +609,39 @@ export function createMoonGlobe(canvas, options = {}) {
     return px;
   }
 
+  function measureCssLength(cssLen, fallbackPx) {
+    if (typeof document === "undefined") return fallbackPx;
+    const probe = document.createElement("div");
+    probe.style.cssText =
+      `position:absolute;visibility:hidden;pointer-events:none;width:0;height:${cssLen}`;
+    document.body.appendChild(probe);
+    const px = probe.offsetHeight || fallbackPx;
+    probe.remove();
+    return px;
+  }
+
+  /**
+   * Positive = shift home moon down (CSS translateY).
+   * Phone: unchanged. iPad: +1/8". Mac / desktop: +1/4".
+   */
+  function homeLowerBiasPx() {
+    if (typeof window === "undefined") return 0;
+    const coarse = window.matchMedia("(pointer: coarse)").matches;
+    const minSide = Math.min(window.innerWidth || 0, window.innerHeight || 0);
+    // Phones keep the original high framing
+    if (coarse && minSide <= 500) return 0;
+    // iPad / large tablets
+    if (coarse) return measureCssLength("0.125in", 12);
+    // MacBook / desktop
+    return measureCssLength("0.25in", 24);
+  }
+
   /** CSS Y so home moon sits in the upper safe band (above bottom info), not mid-screen. */
   function homeScreenOffsetY() {
     const pads = readHomePadsPx();
     // Safe-band center is above the viewport center when bottom pad > top pad.
     // CSS translateY: negative = content moves up. Extra 3/8" on startup.
-    return (pads.top - pads.bottom) / 2 - homeExtraUpPx();
+    return (pads.top - pads.bottom) / 2 - homeExtraUpPx() + homeLowerBiasPx();
   }
 
   function applyHomeFraming() {
@@ -502,8 +649,8 @@ export function createMoonGlobe(canvas, options = {}) {
     camera.up.set(0, 1, 0);
     camera.position.set(0, 0, homeDist);
     clearScreenPan();
-    // Phone home: lift into top band (only change on open / Live / full un-zoom)
-    screenPanY = homeScreenOffsetY();
+    // Phone home: lift into top band (fades out as you zoom — see applyCanvasPanTransform)
+    homeLiftY = homeScreenOffsetY();
     applyCanvasPanTransform();
     readSpherical();
     writeCamera();
@@ -523,6 +670,8 @@ export function createMoonGlobe(canvas, options = {}) {
     spherical.radius = dist;
     writeCamera();
     prevCamDist = camDist();
+    // Re-apply pan so home lift eases out toward full-bleed zoom
+    applyCanvasPanTransform();
   }
 
   /**
@@ -531,14 +680,26 @@ export function createMoonGlobe(canvas, options = {}) {
    */
   let screenPanX = 0;
   let screenPanY = 0;
+  /** Home-only vertical lift; faded to 0 as camera dollies in (full-bleed zoom). */
+  let homeLiftY = 0;
+
+  function homeLiftFade() {
+    const dist = camDist();
+    const span = Math.max(homeDist - MIN_DIST, 0.01);
+    // 1 at home distance, 0 at max zoom
+    const t = THREE.MathUtils.clamp((dist - MIN_DIST) / span, 0, 1);
+    return t * t;
+  }
 
   function applyCanvasPanTransform() {
     // Canvas is already offset by -panMarginPx so viewport shows the center.
     // User pan is added on top; clamp so we stay inside the buffer.
+    const lift = homeLiftY * homeLiftFade();
     const x = THREE.MathUtils.clamp(screenPanX, -panMarginPx, panMarginPx);
-    const y = THREE.MathUtils.clamp(screenPanY, -panMarginPx, panMarginPx);
+    const y = THREE.MathUtils.clamp(screenPanY + lift, -panMarginPx, panMarginPx);
     screenPanX = x;
-    screenPanY = y;
+    // Keep user pan separate from home lift in stored screenPanY
+    screenPanY = THREE.MathUtils.clamp(screenPanY, -panMarginPx, panMarginPx);
     canvas.style.transform = `translate(${x}px, ${y}px)`;
   }
 
@@ -579,6 +740,28 @@ export function createMoonGlobe(canvas, options = {}) {
     applyCanvasPanTransform();
   }
 
+  function fitToHost() {
+    // Size to the real clip host so the canvas always fills edge-to-edge
+    // (window.innerHeight can be short of the fixed host on iOS).
+    const host = canvas.parentElement;
+    let w = window.innerWidth || document.documentElement.clientWidth || 1;
+    let h = window.innerHeight || document.documentElement.clientHeight || 1;
+    if (host) {
+      const rect = host.getBoundingClientRect();
+      if (rect.width > 0) w = Math.max(w, rect.width);
+      if (rect.height > 0) h = Math.max(h, rect.height);
+      // If host stopped above the visual bottom (home-indicator band), extend
+      const gap = Math.max(0, (window.innerHeight || 0) - rect.bottom);
+      if (gap > 0 && gap < 80) h += gap;
+    }
+    const vv = window.visualViewport;
+    if (vv) {
+      w = Math.max(w, vv.width || 0);
+      h = Math.max(h, vv.height || 0, (vv.offsetTop || 0) + (vv.height || 0));
+    }
+    resize(Math.max(1, Math.round(w)), Math.max(1, Math.round(h)));
+  }
+
   function resize(cssW, cssH) {
     const w = Math.max(1, Math.round(cssW));
     const h = Math.max(1, Math.round(cssH));
@@ -611,8 +794,11 @@ export function createMoonGlobe(canvas, options = {}) {
     camera.aspect = bufferW / bufferH;
     camera.updateProjectionMatrix();
 
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2.5));
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, maxPixelRatio));
     renderer.setSize(bufferW, bufferH, false);
+    if (starfield?.material) {
+      starfield.material.size = starPointSize();
+    }
 
     canvas.style.position = "absolute";
     canvas.style.width = `${bufferW}px`;
@@ -626,27 +812,8 @@ export function createMoonGlobe(canvas, options = {}) {
     else setCamDist(homeDist * zoomFrac);
   }
 
-  function fitToHost() {
-    // Size to the real clip host so the canvas always fills edge-to-edge
-    // (window.innerHeight can be short of the fixed host on iOS).
-    const host = canvas.parentElement;
-    let w = window.innerWidth || document.documentElement.clientWidth || 1;
-    let h = window.innerHeight || document.documentElement.clientHeight || 1;
-    if (host) {
-      const rect = host.getBoundingClientRect();
-      if (rect.width > 0) w = rect.width;
-      if (rect.height > 0) h = rect.height;
-    }
-    const vv = window.visualViewport;
-    if (vv) {
-      w = Math.max(w, vv.width || 0);
-      h = Math.max(h, vv.height || 0);
-    }
-    resize(Math.max(1, Math.round(w)), Math.max(1, Math.round(h)));
-  }
-
   function resetView() {
-    camera.far = 80;
+    camera.far = 200;
     homeDist = computeHomeDistance(
       width || window.innerWidth,
       height || window.innerHeight
@@ -946,6 +1113,12 @@ export function createMoonGlobe(canvas, options = {}) {
         material?.map?.dispose();
         material?.normalMap?.dispose();
         material?.dispose();
+      }
+      if (starfield) {
+        starfield.geometry?.dispose();
+        starfield.material?.map?.dispose();
+        starfield.material?.dispose();
+        starfield.userData.starTexture?.dispose();
       }
       renderer.dispose();
     },

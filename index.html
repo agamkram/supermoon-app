@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" style="background-color:#020308">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
@@ -9,6 +9,34 @@
   <meta name="apple-mobile-web-app-title" content="SuperMoon" />
   <meta name="description" content="Hi-res 3D Moon with live phase shading for your location." />
   <title>SuperMoon</title>
+  <script>
+    /* iOS A2HS: lock fill height before first paint.
+       Phone: screen.height > inner → use screen.
+       iPad: screen.* often *undershoots* inner → add safe-area extra. */
+    (function () {
+      var n = window.navigator;
+      var standalone =
+        n.standalone === true ||
+        window.matchMedia("(display-mode: standalone)").matches ||
+        window.matchMedia("(display-mode: fullscreen)").matches;
+      if (!standalone) return;
+      var root = document.documentElement;
+      root.classList.add("pwa-standalone");
+      var iw = window.innerWidth || 0;
+      var ih = window.innerHeight || 0;
+      var sw = window.screen.width || 0;
+      var sh = window.screen.height || 0;
+      var screenMax = Math.max(sw, sh);
+      var screenMin = Math.min(sw, sh);
+      var fillH = ih >= iw ? Math.max(ih, screenMax) : Math.max(ih, screenMin);
+      var extra = 0;
+      if (Math.min(iw, ih) >= 600 && screenMax < ih - 10) {
+        extra = 20; /* refined to real insetB once body exists */
+      }
+      root.style.setProperty("--pwa-fill-h", fillH + "px");
+      root.style.setProperty("--pwa-extra-b", extra + "px");
+    })();
+  </script>
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" type="image/png" href="apple-touch-icon.png" />
   <link rel="apple-touch-icon" href="apple-touch-icon.png" />
@@ -23,9 +51,9 @@
     :root {
       color-scheme: dark;
       --text: #e8edf7;
-      --muted: #8b95a8;
-      --dim: #7a8496;
-      --faint: #4a5366;
+      --muted: #b04040;
+      --dim: #a03838;
+      --faint: #6a2020;
       --cell: #12161e;
       --panel: rgba(8, 12, 20, 0.72);
       --line: #2a3140;
@@ -39,7 +67,6 @@
       margin: 0;
       width: 100%;
       height: 100%;
-      height: 100dvh;
       min-height: 100%;
       min-height: -webkit-fill-available;
       overflow: hidden;
@@ -50,16 +77,36 @@
       touch-action: none;
     }
 
-    /* Full visual viewport (incl. iOS home-indicator band) */
+    /*
+     * Full-bleed GL stack. Do NOT use max-height:100dvh — undershoots on iOS.
+     * Safari: env() overpaint. Home-screen PWA: height locked to screen (see JS)
+     * because innerHeight stays short of screen.height and clips env() overshoot.
+     */
     #stage,
     #moon-host,
     #touch-plane {
       position: fixed;
-      inset: 0;
+      top: calc(-1 * env(safe-area-inset-top, 0px));
+      right: calc(-1 * env(safe-area-inset-right, 0px));
+      bottom: calc(-1 * env(safe-area-inset-bottom, 0px));
+      left: calc(-1 * env(safe-area-inset-left, 0px));
+    }
+
+    html.pwa-standalone,
+    html.pwa-standalone body {
+      height: calc(var(--pwa-fill-h, 100%) + var(--pwa-extra-b, 0px));
+      min-height: calc(var(--pwa-fill-h, 100%) + var(--pwa-extra-b, 0px));
+    }
+
+    html.pwa-standalone #stage,
+    html.pwa-standalone #moon-host,
+    html.pwa-standalone #touch-plane {
+      top: 0;
+      right: 0;
+      bottom: auto;
+      left: 0;
       width: 100%;
-      height: 100%;
-      height: 100dvh;
-      max-height: 100dvh;
+      height: calc(var(--pwa-fill-h, 100%) + var(--pwa-extra-b, 0px));
     }
 
     /* Clips the oversized GL canvas; black matches clear color */
@@ -84,9 +131,14 @@
       cursor: grab;
       opacity: 0;
       transition: opacity 0.45s ease;
+      background: #020308;
     }
 
     #moon-canvas.is-ready { opacity: 1; }
+    /* PWA: shorter fade — long 0→1 reads as a flash on open */
+    html.pwa-standalone #moon-canvas {
+      transition: opacity 0.12s ease;
+    }
     #moon-canvas:active { cursor: grabbing; }
 
     .chrome {
@@ -139,9 +191,9 @@
       padding:
         0.15rem
         max(0.35rem, env(safe-area-inset-right))
-        max(0.35rem, env(safe-area-inset-bottom))
+        max(0.35rem, env(safe-area-inset-bottom, 0px))
         max(0.35rem, env(safe-area-inset-left));
-      background: linear-gradient(to top, rgba(2, 3, 8, 0.97) 70%, rgba(2, 3, 8, 0.55) 100%);
+      background: transparent;
       pointer-events: none;
       touch-action: none;
       display: flex;
@@ -175,9 +227,9 @@
       grid-auto-rows: var(--m-row-h);
     }
 
-    /* Rise / set + night vision toggle */
+    /* Rise / high / set + night vision toggle — three equal time cells */
     .m-grid-rise {
-      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(3.6rem, 0.75fr);
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(3.6rem, 0.75fr);
       grid-auto-rows: var(--m-row-h);
       align-items: stretch;
     }
@@ -269,6 +321,169 @@
       color: var(--moon);
       font-size: 11px;
       letter-spacing: -0.03em;
+    }
+
+    /*
+     * Tablets (iPad and similar): phone landscape is excluded via min-height.
+     * Coarse pointer + both sides ≥600px ≈ tablet class across platforms.
+     */
+    @media (pointer: coarse) and (min-width: 600px) and (min-height: 600px) {
+      :root {
+        --m-row-h: 2.85rem;
+      }
+
+      .loc-bar {
+        max-width: 620px;
+        gap: 0.28rem;
+        padding-left: max(0.55rem, env(safe-area-inset-left));
+        padding-right: max(0.55rem, env(safe-area-inset-right));
+      }
+
+      .m-grid,
+      .m-grid-3,
+      .m-grid-rise {
+        gap: 3px;
+      }
+
+      .m-cell {
+        padding: 3px 8px 4px;
+        border-radius: 8px;
+      }
+
+      .m-cell .k {
+        font-size: 9px;
+        letter-spacing: 0.05em;
+      }
+
+      .m-cell .v {
+        font-size: 15px;
+      }
+
+      .m-cell .v.sm {
+        font-size: 14px;
+      }
+
+      .m-cell .v.moon {
+        font-size: 14px;
+      }
+
+      #m-station {
+        font-size: 12px;
+      }
+
+      .m-grid-rise {
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(4.2rem, 0.75fr);
+      }
+
+      .vision-btn {
+        font-size: 12px;
+        border-radius: 8px;
+      }
+
+      .loc-strip {
+        gap: 3px;
+      }
+
+      .loc-card {
+        max-height: 3.2rem;
+        border-radius: 8px;
+      }
+
+      .loc-card-place,
+      .loc-card.hemi-card {
+        padding: 3px 0.45rem 4px;
+        gap: 3px;
+      }
+
+      .loc-label,
+      .hemi-label {
+        font-size: 8px;
+      }
+
+      .loc-place-row {
+        min-height: 1.45rem;
+        gap: 0.35rem;
+      }
+
+      .loc-coords {
+        font-size: 13px;
+      }
+
+      .loc-place-row button,
+      .geo-btn,
+      .hemi button {
+        font-size: 12px;
+        min-height: 1.45rem;
+      }
+
+      .cycle-date {
+        font-size: 12px;
+      }
+
+      .live-btn {
+        font-size: 12px;
+        min-height: 1.55rem;
+        padding: 0 0.65rem;
+      }
+    }
+
+    /*
+     * Phone landscape only (short height). iPad landscape is taller (≥600px)
+     * and keeps the normal / tablet layouts. Shrink stats so the moon stays visible.
+     */
+    @media (orientation: landscape) and (max-height: 500px) {
+      .chrome {
+        height: calc(0.28in + env(safe-area-inset-top, 0px));
+      }
+
+      .app-title {
+        font-size: 0.16in;
+      }
+
+      .loc-bar {
+        max-width: min(620px, 96vw);
+        gap: 0.06rem;
+        padding-top: 0.06rem;
+        /* zoom reduces used layout height on iOS (transform would not) */
+        zoom: 0.72;
+      }
+
+      :root {
+        --m-row-h: 1.55rem;
+      }
+
+      .m-grid,
+      .m-grid-3,
+      .m-grid-rise {
+        gap: 1px;
+      }
+
+      .m-cell {
+        padding: 1px 4px 2px;
+        border-radius: 4px;
+      }
+
+      .m-cell .k {
+        font-size: 6px;
+      }
+
+      .m-cell .v {
+        font-size: 10px;
+      }
+
+      .m-cell .v.sm,
+      .m-cell .v.moon {
+        font-size: 9px;
+      }
+
+      .loc-strip {
+        gap: 2px;
+      }
+
+      .cycle {
+        padding: 0.06rem 0.22rem 0.08rem;
+        gap: 0.06rem;
+      }
     }
 
     /* Compact location + hemi row (desktop was ballooning under the cycle slider) */
@@ -683,11 +898,7 @@
     }
 
     body.is-red-mode .loc-bar {
-      background: linear-gradient(
-        to top,
-        rgba(2, 0, 0, 0.98) 70%,
-        rgba(2, 0, 0, 0.6) 100%
-      );
+      background: transparent;
     }
 
     body.is-red-mode .live-btn,
@@ -822,11 +1033,15 @@
         <div class="v sm" id="m-vsmax">—</div>
       </div>
     </div>
-    <!-- Row order: metrics 1–2, rise/set/red, tides, location -->
-    <div class="m-grid m-grid-rise" aria-label="Moon rise set and display mode">
+    <!-- Row order: metrics 1–2, rise/high/set/red, tides, location -->
+    <div class="m-grid m-grid-rise" aria-label="Moon rise high set and display mode">
       <div class="m-cell">
         <div class="k">Moonrise</div>
         <div class="v sm" id="m-rise">—</div>
+      </div>
+      <div class="m-cell">
+        <div class="k">High moon</div>
+        <div class="v sm" id="m-high">—</div>
       </div>
       <div class="m-cell">
         <div class="k">Moonset</div>
@@ -930,7 +1145,7 @@
   <script src="astronomy.js"></script>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
   <script type="module">
-    import { createMoonGlobe } from "./moon.js?v=97";
+    import { createMoonGlobe } from "./moon.js?v=1";
 
     const STORAGE_KEY = "moon-globe-loc-v1";
     const TIDE_STATIONS_KEY = "supermoon-noaa-tide-stations-v5";
@@ -989,6 +1204,7 @@
       htide: document.getElementById("m-htide"),
       ltide: document.getElementById("m-ltide"),
       rise: document.getElementById("m-rise"),
+      high: document.getElementById("m-high"),
       set: document.getElementById("m-set"),
     };
 
@@ -1413,15 +1629,27 @@
       } catch (_) {}
 
       let rise = null;
+      let high = null;
       let set = null;
       try {
         if (Number.isFinite(lat) && Number.isFinite(lon)) {
           const obs = new A.Observer(lat, lon, 0);
-          // +1 rise, −1 set; search window 1 day
-          const dayStart = new Date(when);
-          dayStart.setHours(0, 0, 0, 0);
-          rise = A.SearchRiseSet(A.Body.Moon, obs, +1, dayStart, 1);
-          set = A.SearchRiseSet(A.Body.Moon, obs, -1, dayStart, 1);
+          // One visibility pass: next moonset, rise that starts that pass, meridian (high) between them
+          const setEv = A.SearchRiseSet(A.Body.Moon, obs, -1, when, 2);
+          if (setEv) {
+            set = setEv;
+            const riseStart = new Date(setEv.date.getTime() - 36 * 3600000);
+            const riseEv = A.SearchRiseSet(A.Body.Moon, obs, +1, riseStart, 2);
+            if (riseEv && riseEv.date < setEv.date) {
+              rise = riseEv;
+              const tr = A.SearchHourAngle(A.Body.Moon, obs, 0, riseEv.date, +1);
+              if (tr && tr.time && tr.time.date <= setEv.date) high = tr;
+            } else {
+              const trStart = new Date(setEv.date.getTime() - 20 * 3600000);
+              const tr = A.SearchHourAngle(A.Body.Moon, obs, 0, trStart, +1);
+              if (tr && tr.time && tr.time.date <= setEv.date) high = tr;
+            }
+          }
         }
       } catch (_) {}
 
@@ -1442,6 +1670,7 @@
         vsAvg,
         vsMax,
         rise: rise ? rise.date : null,
+        high: high && high.time ? high.time.date : null,
         set: set ? set.date : null,
         when,
       };
@@ -1478,12 +1707,13 @@
         ? `${m.vsMax.toFixed(0)}%`
         : "—";
       el.rise.textContent = fmtTime(m.rise);
+      el.high.textContent = fmtTime(m.high);
       el.set.textContent = fmtTime(m.set);
 
       if (previewMode) {
         cycleDate.innerHTML = `${fmtDateTime(m.when)}<span class="live-tag">Preview</span>`;
       } else {
-        cycleDate.innerHTML = `${fmtDateTime(m.when)}<span class="live-tag">Live · v97</span>`;
+        cycleDate.innerHTML = `${fmtDateTime(m.when)}<span class="live-tag">Live · v1</span>`;
       }
 
       // Always nearest NOAA prediction station for observer lat/lon
@@ -1803,19 +2033,67 @@
       showPhase(globe.getPhaseInfo());
     }, 60000);
 
+    function pwaFillHeightPx() {
+      const iw = window.innerWidth || 0;
+      const ih = window.innerHeight || 0;
+      const sw = window.screen.width || 0;
+      const sh = window.screen.height || 0;
+      // iOS keeps screen.* in portrait metrics; pick the axis for current height.
+      if (ih >= iw) return Math.max(ih, Math.max(sw, sh));
+      return Math.max(ih, Math.min(sw, sh));
+    }
+
+    /** iPad PWA: screen.* undershoots CSS inner — phone uses screen height instead. */
+    function pwaExtraBottomPx() {
+      const iw = window.innerWidth || 0;
+      const ih = window.innerHeight || 0;
+      const sw = window.screen.width || 0;
+      const sh = window.screen.height || 0;
+      const screenMax = Math.max(sw, sh);
+      if (Math.min(iw, ih) < 600) return 0;
+      if (screenMax >= ih - 10) return 0;
+      return Math.max(readSafeInsetBottom(), 20);
+    }
+
+    function syncPwaFillHeight() {
+      const root = document.documentElement;
+      if (!root.classList.contains("pwa-standalone")) {
+        root.style.removeProperty("--pwa-fill-h");
+        root.style.removeProperty("--pwa-extra-b");
+        return 0;
+      }
+      const fillH = pwaFillHeightPx();
+      const extra = pwaExtraBottomPx();
+      root.style.setProperty("--pwa-fill-h", `${fillH}px`);
+      root.style.setProperty("--pwa-extra-b", `${extra}px`);
+      return fillH + extra;
+    }
+
+    function readSafeInsetBottom() {
+      const probe = document.createElement("div");
+      probe.style.cssText =
+        "position:fixed;visibility:hidden;pointer-events:none;padding-bottom:env(safe-area-inset-bottom,0px)";
+      document.body.appendChild(probe);
+      const px = parseFloat(getComputedStyle(probe).paddingBottom) || 0;
+      probe.remove();
+      return px;
+    }
+
     function onResize() {
+      syncPwaFillHeight();
       globe.fitToHost();
     }
     window.addEventListener("resize", onResize);
     window.addEventListener("orientationchange", () => {
-      setTimeout(onResize, 150);
-      setTimeout(onResize, 400);
+      setTimeout(onResize, 50);
+      setTimeout(onResize, 300);
     });
     window.visualViewport?.addEventListener("resize", onResize);
-    requestAnimationFrame(() => {
-      onResize();
-      requestAnimationFrame(onResize);
-    });
+    window.addEventListener("pageshow", onResize);
+    syncPwaFillHeight();
+    onResize();
+    setTimeout(onResize, 100);
+    setTimeout(onResize, 400);
   </script>
 </body>
 </html>
