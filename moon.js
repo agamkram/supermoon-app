@@ -626,14 +626,36 @@ export function createMoonGlobe(canvas, options = {}) {
 
   /**
    * Positive = shift home moon down (CSS translateY).
-   * Phone: unchanged. iPad: +1/8". Mac / desktop: +1/4".
+   * Phone Safari (browser tab only): +1/8". Phone PWA / Chrome: unchanged.
+   * iPad: +1/8". Mac / desktop: +1/4".
    */
+  function isPhoneSafariBrowser() {
+    if (typeof window === "undefined" || typeof navigator === "undefined") {
+      return false;
+    }
+    const ua = navigator.userAgent || "";
+    if (!/iPhone|iPod/.test(ua)) return false;
+    // Home-screen / standalone PWA keeps original framing
+    if (
+      window.navigator.standalone === true ||
+      window.matchMedia("(display-mode: standalone)").matches
+    ) {
+      return false;
+    }
+    // Chrome / Firefox / Edge on iOS — not Safari
+    if (/CriOS|FxiOS|EdgiOS|OPiOS|OPT\//.test(ua)) return false;
+    return /Safari/i.test(ua);
+  }
+
   function homeLowerBiasPx() {
     if (typeof window === "undefined") return 0;
     const coarse = window.matchMedia("(pointer: coarse)").matches;
     const minSide = Math.min(window.innerWidth || 0, window.innerHeight || 0);
-    // Phones keep the original high framing
-    if (coarse && minSide <= 500) return 0;
+    // Phone Safari tab: nudge moon down 1/8" at startup / Live home
+    if (coarse && minSide <= 500) {
+      if (isPhoneSafariBrowser()) return measureCssLength("0.125in", 12);
+      return 0;
+    }
     // iPad / large tablets
     if (coarse) return measureCssLength("0.125in", 12);
     // MacBook / desktop

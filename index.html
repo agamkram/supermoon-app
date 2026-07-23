@@ -43,24 +43,25 @@
   <link rel="preload" href="moon-2k.jpg" as="image" type="image/jpeg" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&family=IBM+Plex+Mono:wght@500;600&family=Michroma&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=IBM+Plex+Mono:wght@500;600&family=Michroma&display=swap" rel="stylesheet" />
   <link rel="preconnect" href="https://unpkg.com" crossorigin />
   <link rel="modulepreload" href="https://unpkg.com/three@0.160.0/build/three.module.js" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
   <style>
     :root {
       color-scheme: dark;
-      --text: #e8edf7;
-      --muted: #d01828;
-      --dim: #b01018;
-      --faint: #7a0810;
+      --text: #e8f4fc;
+      --muted: #7eb8d8;
+      --dim: #6aa8cc;
+      --faint: #4a88a8;
       --cell: rgba(18, 22, 30, 0.58);
       --panel: rgba(8, 12, 20, 0.72);
       --line: #2a3140;
       --moon: #c8d0e0;
       --mono: "IBM Plex Mono", ui-monospace, monospace;
-      /* Red labels: phone + Mac 8px; iPad 10px (see tablet media) */
-      --label-size: 8px;
+      --font: "DM Sans", system-ui, sans-serif;
+      /* Labels: phone + Mac 9.25px; iPad 11px (see tablet media) */
+      --label-size: 9.25px;
     }
 
     * { box-sizing: border-box; }
@@ -74,7 +75,7 @@
       overflow: hidden;
       background: #020308;
       color: var(--text);
-      font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+      font-family: var(--font);
       -webkit-text-size-adjust: 100%;
       touch-action: none;
     }
@@ -132,14 +133,14 @@
       touch-action: none;
       cursor: grab;
       opacity: 0;
-      transition: opacity 0.45s ease;
+      transition: opacity 0.2s ease;
       background: #020308;
     }
 
     #moon-canvas.is-ready { opacity: 1; }
-    /* PWA: shorter fade — long 0→1 reads as a flash on open */
+    /* PWA: no fade — opacity pop reads as a flash on open */
     html.pwa-standalone #moon-canvas {
-      transition: opacity 0.12s ease;
+      transition: none;
     }
     #moon-canvas:active { cursor: grabbing; }
 
@@ -210,9 +211,11 @@
       touch-action: manipulation;
     }
 
-    /* Uniform metric row height (match phase row) */
+    /* Uniform metric cells — equal pad, tight label↔value gap */
     :root {
-      --m-row-h: 2.2rem;
+      --m-row-h: 2.25rem;
+      --m-cell-pad: 3px;
+      --m-cell-gap: 2px;
     }
 
     .m-grid {
@@ -223,9 +226,13 @@
       pointer-events: none;
     }
 
-    /* Station gets most of the row; hi/lo stay compact */
+    /* Station + High / Mid / Low — keep tide boxes compact */
     .m-grid-3 {
-      grid-template-columns: minmax(0, 1.8fr) minmax(3.4rem, 0.55fr) minmax(3.4rem, 0.55fr);
+      grid-template-columns:
+        minmax(0, 1fr)
+        minmax(2.1rem, 0.32fr)
+        minmax(2.1rem, 0.32fr)
+        minmax(2.1rem, 0.32fr);
       grid-auto-rows: var(--m-row-h);
     }
 
@@ -239,26 +246,28 @@
     }
 
     #m-station {
-      font-size: 10px;
+      font-size: 11px;
       line-height: 1.1;
+      letter-spacing: -0.04em;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
     }
 
     .m-cell-vision {
-      justify-content: center;
+      justify-content: stretch;
       align-items: stretch;
-      padding: 2px !important;
+      padding: var(--m-cell-pad) !important;
     }
 
+    /* Off = clear over shared cell chrome (matches other stat boxes) */
     .vision-btn {
       width: 100%;
       height: 100%;
       min-height: 0;
-      border: 1px solid var(--line);
-      border-radius: 6px;
-      background: rgba(255, 255, 255, 0.06);
+      border: none;
+      border-radius: 3px;
+      background: transparent;
       color: var(--text);
       font-family: "DM Sans", system-ui, sans-serif;
       font-size: 9px;
@@ -268,57 +277,59 @@
       cursor: pointer;
       touch-action: manipulation;
       line-height: 1;
-      padding: 0.12rem 0.2rem;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
     }
 
-    .vision-btn:hover {
-      background: rgba(255, 255, 255, 0.1);
-    }
-
+    /* On only — no hover “third” look */
     .vision-btn[aria-pressed="true"] {
-      background: rgba(255, 255, 255, 0.16);
+      background: rgba(232, 244, 252, 0.22);
     }
 
     body.is-red-mode .vision-btn {
-      background: rgba(90, 8, 10, 0.65);
-      border-color: #6a0c10;
+      background: transparent;
       color: var(--text);
     }
 
     body.is-red-mode .vision-btn[aria-pressed="true"] {
-      background: rgba(130, 12, 16, 0.85);
+      background: rgba(200, 28, 36, 0.55);
     }
 
     .m-cell {
       background: var(--cell);
       border: 1px solid var(--line);
       border-radius: 6px;
-      padding: 2px 5px 3px;
+      padding: var(--m-cell-pad);
       min-width: 0;
       min-height: var(--m-row-h);
       height: var(--m-row-h);
       box-sizing: border-box;
       display: flex;
       flex-direction: column;
-      justify-content: center;
-      gap: 4px;
+      justify-content: space-between;
+      align-items: stretch;
+      gap: var(--m-cell-gap);
       overflow: hidden;
     }
 
     .m-cell .k {
       font-size: var(--label-size);
       font-weight: 600;
-      letter-spacing: 0.04em;
+      letter-spacing: 0.03em;
       text-transform: uppercase;
       color: var(--dim);
-      line-height: 1.05;
+      line-height: 1.15;
       flex: 0 0 auto;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
 
     .m-cell .v {
       font-family: var(--mono);
       font-weight: 600;
-      font-size: 12px;
+      font-size: 13px;
       letter-spacing: -0.02em;
       line-height: 1.1;
       color: var(--text);
@@ -326,12 +337,13 @@
       overflow: hidden;
       text-overflow: ellipsis;
       flex: 0 0 auto;
+      min-width: 0;
     }
 
-    .m-cell .v.sm { font-size: 11px; }
+    .m-cell .v.sm { font-size: 12px; }
     .m-cell .v.moon {
       color: var(--moon);
-      font-size: 11px;
+      font-size: 12px;
       letter-spacing: -0.03em;
     }
 
@@ -341,8 +353,10 @@
      */
     @media (pointer: coarse) and (min-width: 600px) and (min-height: 600px) {
       :root {
-        --m-row-h: 2.85rem;
-        --label-size: 10px;
+        --m-row-h: 2.9rem;
+        --m-cell-pad: 5px;
+        --m-cell-gap: 2px;
+        --label-size: 11px;
       }
 
       .loc-bar {
@@ -359,28 +373,27 @@
       }
 
       .m-cell {
-        padding: 3px 8px 4px;
         border-radius: 8px;
       }
 
       .m-cell .k {
-        letter-spacing: 0.05em;
+        letter-spacing: 0.04em;
       }
 
       .m-cell .v {
-        font-size: 15px;
+        font-size: 16px;
       }
 
       .m-cell .v.sm {
-        font-size: 14px;
+        font-size: 15px;
       }
 
       .m-cell .v.moon {
-        font-size: 14px;
+        font-size: 15px;
       }
 
       #m-station {
-        font-size: 12px;
+        font-size: 13px;
       }
 
       .m-grid-rise {
@@ -391,7 +404,7 @@
 
       .vision-btn {
         font-size: 12px;
-        border-radius: 8px;
+        border-radius: 6px;
       }
 
       .loc-strip {
@@ -403,12 +416,6 @@
         border-radius: 8px;
       }
 
-      .loc-card-place,
-      .loc-card.hemi-card {
-        padding: 3px 8px 4px;
-        gap: 4px;
-      }
-
       .loc-place-row {
         min-height: 1.45rem;
         height: 1.45rem;
@@ -416,7 +423,7 @@
       }
 
       .loc-coords {
-        font-size: 13px;
+        font-size: 15px;
       }
 
       .loc-place-row button,
@@ -432,13 +439,40 @@
       }
 
       .cycle-date {
-        font-size: 12px;
+        font-size: 14px;
       }
 
       .live-btn {
         font-size: 12px;
         min-height: 1.55rem;
         padding: 0 0.65rem;
+      }
+
+      .slider-track {
+        height: 48px;
+      }
+
+      #phase-slider {
+        height: 48px;
+      }
+
+      #phase-slider::-webkit-slider-runnable-track {
+        height: 6px;
+      }
+
+      #phase-slider::-webkit-slider-thumb {
+        width: 34px;
+        height: 34px;
+        margin-top: -14px;
+      }
+
+      #phase-slider::-moz-range-track {
+        height: 6px;
+      }
+
+      #phase-slider::-moz-range-thumb {
+        width: 34px;
+        height: 34px;
       }
     }
 
@@ -465,6 +499,8 @@
 
       :root {
         --m-row-h: 1.55rem;
+        --m-cell-pad: 2px;
+        --m-cell-gap: 1px;
         --label-size: 7px;
       }
 
@@ -475,7 +511,6 @@
       }
 
       .m-cell {
-        padding: 1px 4px 2px;
         border-radius: 4px;
       }
 
@@ -493,8 +528,25 @@
       }
 
       .cycle {
-        padding: 0.06rem 0.22rem 0.08rem;
+        padding: 0.06rem 0.22rem 0.02rem;
         gap: 0.06rem;
+      }
+
+      .m-cell-tight-x {
+        padding-left: 1px;
+        padding-right: 1px;
+      }
+    }
+
+    /* Phone portrait: trim space under slider / Live row */
+    @media (pointer: coarse) and (max-width: 599px) {
+      .cycle {
+        padding-bottom: 1px;
+      }
+
+      .m-cell-tight-x {
+        padding-left: 1px;
+        padding-right: 1px;
       }
     }
 
@@ -524,20 +576,19 @@
     .loc-card.hemi-card {
       flex-direction: column;
       align-items: stretch;
-      justify-content: center;
-      /* Match .m-cell: label sits in the band between top edge and white value */
-      gap: 4px;
-      padding: 2px 5px 3px;
+      justify-content: space-between;
+      gap: var(--m-cell-gap);
+      padding: var(--m-cell-pad);
     }
 
     .loc-label,
     .hemi-label {
       font-size: var(--label-size);
       font-weight: 600;
-      letter-spacing: 0.04em;
+      letter-spacing: 0.03em;
       text-transform: uppercase;
       color: var(--dim);
-      line-height: 1.05;
+      line-height: 1.15;
       text-align: left;
       margin: 0;
       flex: 0 0 auto;
@@ -560,7 +611,7 @@
 
     .loc-coords {
       font-family: var(--mono);
-      font-size: 9px;
+      font-size: 11px;
       font-weight: 600;
       letter-spacing: -0.02em;
       line-height: 1.1;
@@ -803,7 +854,7 @@
 
     .cycle-date {
       font-family: var(--mono);
-      font-size: 10px;
+      font-size: 11px;
       font-weight: 600;
       letter-spacing: -0.02em;
       color: var(--text);
@@ -812,16 +863,6 @@
       overflow: hidden;
       text-overflow: ellipsis;
       min-width: 0;
-    }
-
-    .cycle-date .live-tag {
-      font-family: "DM Sans", system-ui, sans-serif;
-      font-size: 8px;
-      font-weight: 600;
-      letter-spacing: 0.05em;
-      text-transform: uppercase;
-      color: var(--dim);
-      margin-left: 0.28rem;
     }
 
     /* Slider shortened; Live sits after it in the freed width */
@@ -835,19 +876,55 @@
     .slider-track {
       flex: 1 1 auto;
       min-width: 0;
-      height: 22px;
+      height: 36px;
       display: flex;
       align-items: center;
     }
 
     #phase-slider {
+      -webkit-appearance: none;
+      appearance: none;
       width: 100%;
-      height: 22px;
+      height: 36px;
       margin: 0;
-      accent-color: #c8d4e8;
+      background: transparent;
       cursor: pointer;
       pointer-events: auto;
       touch-action: manipulation;
+    }
+
+    #phase-slider::-webkit-slider-runnable-track {
+      height: 5px;
+      border-radius: 3px;
+      background: rgba(200, 212, 232, 0.28);
+    }
+
+    #phase-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 26px;
+      height: 26px;
+      margin-top: -10.5px;
+      border-radius: 50%;
+      border: 1px solid rgba(255, 255, 255, 0.35);
+      background: #e8edf7;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
+    }
+
+    #phase-slider::-moz-range-track {
+      height: 5px;
+      border-radius: 3px;
+      background: rgba(200, 212, 232, 0.28);
+      border: none;
+    }
+
+    #phase-slider::-moz-range-thumb {
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      border: 1px solid rgba(255, 255, 255, 0.35);
+      background: #e8edf7;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
     }
 
     .live-btn {
@@ -952,17 +1029,17 @@
 
     /* WebKit / Blink range thumb stays white unless styled explicitly */
     body.is-red-mode #phase-slider::-webkit-slider-runnable-track {
-      height: 4px;
-      border-radius: 2px;
+      height: 5px;
+      border-radius: 3px;
       background: var(--red-track);
     }
 
     body.is-red-mode #phase-slider::-webkit-slider-thumb {
       -webkit-appearance: none;
       appearance: none;
-      width: 16px;
-      height: 16px;
-      margin-top: -6px;
+      width: 26px;
+      height: 26px;
+      margin-top: -10.5px;
       border-radius: 50%;
       border: 1px solid #4a0c0c;
       background: var(--red-thumb);
@@ -970,19 +1047,37 @@
     }
 
     body.is-red-mode #phase-slider::-moz-range-track {
-      height: 4px;
-      border-radius: 2px;
+      height: 5px;
+      border-radius: 3px;
       background: var(--red-track);
       border: none;
     }
 
     body.is-red-mode #phase-slider::-moz-range-thumb {
-      width: 16px;
-      height: 16px;
+      width: 26px;
+      height: 26px;
       border-radius: 50%;
       border: 1px solid #4a0c0c;
       background: var(--red-thumb);
       box-shadow: none;
+    }
+
+    @media (pointer: coarse) and (min-width: 600px) and (min-height: 600px) {
+      body.is-red-mode #phase-slider::-webkit-slider-runnable-track {
+        height: 6px;
+      }
+      body.is-red-mode #phase-slider::-webkit-slider-thumb {
+        width: 34px;
+        height: 34px;
+        margin-top: -14px;
+      }
+      body.is-red-mode #phase-slider::-moz-range-track {
+        height: 6px;
+      }
+      body.is-red-mode #phase-slider::-moz-range-thumb {
+        width: 34px;
+        height: 34px;
+      }
     }
 
     body.is-red-mode .app-title {
@@ -1052,7 +1147,7 @@
         <div class="k">vs average</div>
         <div class="v sm" id="m-vsavg">—</div>
       </div>
-      <div class="m-cell">
+      <div class="m-cell m-cell-tight-x">
         <div class="k">of yearly max</div>
         <div class="v sm" id="m-vsmax">—</div>
       </div>
@@ -1102,6 +1197,10 @@
       <div class="m-cell">
         <div class="k">High tide</div>
         <div class="v sm" id="m-htide">—</div>
+      </div>
+      <div class="m-cell">
+        <div class="k">Mid tide</div>
+        <div class="v sm" id="m-mtide">—</div>
       </div>
       <div class="m-cell">
         <div class="k">Low tide</div>
@@ -1180,10 +1279,10 @@
   <script src="astronomy.js"></script>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
   <script type="module">
-    import { createMoonGlobe } from "./moon.js?v=3";
+    import { createMoonGlobe } from "./moon.js?v=5";
 
     const STORAGE_KEY = "moon-globe-loc-v1";
-    const TIDE_STATIONS_KEY = "supermoon-noaa-tide-stations-v5";
+    const TIDE_STATIONS_KEY = "supermoon-noaa-tide-stations-v6";
     /** Name tokens that mark inland / river gauges — drop from nearest pick */
     const INLAND_STATION_RE =
       /\b(creek|bayou|slough|plantation|drawbridge|highway bridge|railroad bridge|mi\.?\s*above|miles?\s+above|above\s+(entrance|mouth)|ferry landing)\b/i;
@@ -1237,6 +1336,7 @@
       vsmax: document.getElementById("m-vsmax"),
       station: document.getElementById("m-station"),
       htide: document.getElementById("m-htide"),
+      mtide: document.getElementById("m-mtide"),
       ltide: document.getElementById("m-ltide"),
       rise: document.getElementById("m-rise"),
       high: document.getElementById("m-high"),
@@ -1311,7 +1411,10 @@
           id: String(s.id),
           lat: Number(s.lat),
           lng: Number(s.lng),
-          name: String(s.name || s.id),
+          name: String(s.name || s.id)
+            .trim()
+            .replace(/\s+/g, " ")
+            .replace(/\s*,\s*/g, ", "),
           state: s.state ? String(s.state).trim() : "",
         }))
         .filter((s) => !INLAND_STATION_RE.test(s.name));
@@ -1472,43 +1575,61 @@
       return { nextH, nextL };
     }
 
-    /** e.g. "Rhems, Black Mingo Creek, SC" */
-    function formatTideStationLabel(st) {
-      if (!st) return "—";
-      const name = (st.name || st.id || "").trim();
-      const state = (st.state || "").trim().toUpperCase();
-      if (name && state) {
-        // Avoid "Foo, SC, SC" if name already ends with state
-        const re = new RegExp(`,\\s*${state}$`, "i");
-        if (re.test(name)) return name;
-        return `${name}, ${state}`;
-      }
-      return name || st.id || "—";
+    /** Mid-tide ≈ halfway in time between the next high and next low. */
+    function midTideBetween(nextH, nextL) {
+      if (!(nextH instanceof Date) || !(nextL instanceof Date)) return null;
+      const a = nextH.getTime();
+      const b = nextL.getTime();
+      if (!Number.isFinite(a) || !Number.isFinite(b)) return null;
+      return new Date((a + b) / 2);
     }
 
-    function paintTideFields({ station, title, high, low }, seq) {
+    /** e.g. "Rhems, Black Mingo Creek, SC" — normalize spaces; shorten long multi-part names */
+    function formatTideStationLabel(st) {
+      if (!st) return "—";
+      let name = (st.name || st.id || "").trim().replace(/\s+/g, " ");
+      name = name.replace(/\s*,\s*/g, ", ");
+      const state = (st.state || "").trim().toUpperCase();
+      let label = name;
+      if (name && state) {
+        const re = new RegExp(`,\\s*${state}$`, "i");
+        label = re.test(name) ? name : `${name}, ${state}`;
+      } else {
+        label = name || st.id || "—";
+      }
+      // Phone cells are narrow: "Place, Long Creek Name, ST" → "Place, ST"
+      const parts = label.split(", ").filter(Boolean);
+      if (parts.length >= 3 && label.length > 22) {
+        const last = parts[parts.length - 1];
+        label = `${parts[0]}, ${last}`;
+      }
+      return label;
+    }
+
+    function paintTideFields({ station, title, high, mid, low }, seq) {
       if (seq !== tideSeq) return;
       if (station != null) {
         el.station.textContent = station;
         if (title != null) el.station.title = title;
       }
       if (high != null) el.htide.textContent = high;
+      if (mid != null) el.mtide.textContent = mid;
       if (low != null) el.ltide.textContent = low;
     }
 
-    /** Nearest coastal NOAA station → name + next high/low. */
+    /** Nearest coastal NOAA station → name + next high/mid/low. */
     async function updateTidesNow(lat, lon, when) {
       const seq = ++tideSeq;
       if (!Number.isFinite(lat) || !Number.isFinite(lon) || !(when instanceof Date)) {
-        paintTideFields({ station: "—", high: "—", low: "—" }, seq);
+        paintTideFields({ station: "—", high: "—", mid: "—", low: "—" }, seq);
         return;
       }
 
       // Keep previous station visible while refreshing (no flash to … / —)
       if (!lastTideStationLabel) {
-        paintTideFields({ station: "…", high: "…", low: "…" }, seq);
+        paintTideFields({ station: "…", high: "…", mid: "…", low: "…" }, seq);
       } else {
-        paintTideFields({ high: "…", low: "…" }, seq);
+        paintTideFields({ high: "…", mid: "…", low: "…" }, seq);
       }
 
       try {
@@ -1518,18 +1639,24 @@
         if (!near?.station) {
           // Only clear if we never had a good label
           if (!lastTideStationLabel) {
-            paintTideFields({ station: "—", high: "—", low: "—" }, seq);
+            paintTideFields({ station: "—", high: "—", mid: "—", low: "—" }, seq);
           } else {
-            paintTideFields({ high: "—", low: "—" }, seq);
+            paintTideFields({ high: "—", mid: "—", low: "—" }, seq);
           }
           return;
         }
         const place = formatTideStationLabel(near.station);
+        const fullName = (() => {
+          let n = (near.station.name || "").trim().replace(/\s+/g, " ").replace(/\s*,\s*/g, ", ");
+          const st = (near.station.state || "").trim().toUpperCase();
+          if (n && st && !new RegExp(`,\\s*${st}$`, "i").test(n)) n = `${n}, ${st}`;
+          return n || place;
+        })();
         lastTideStationLabel = place;
         paintTideFields(
           {
             station: place,
-            title: `${place} · ${Math.round(near.km)} km away`,
+            title: `${fullName} · ${Math.round(near.km)} km away`,
           },
           seq
         );
@@ -1538,21 +1665,26 @@
           const preds = await fetchHiloPredictions(near.station.id, when);
           if (seq !== tideSeq) return;
           const { nextH, nextL } = nextExtremes(preds, when);
+          const mid = midTideBetween(nextH, nextL);
           paintTideFields(
-            { high: fmtTime(nextH), low: fmtTime(nextL) },
+            {
+              high: fmtTime(nextH),
+              mid: fmtTime(mid),
+              low: fmtTime(nextL),
+            },
             seq
           );
         } catch (_) {
-          paintTideFields({ high: "—", low: "—" }, seq);
+          paintTideFields({ high: "—", mid: "—", low: "—" }, seq);
         }
       } catch (_) {
         if (seq !== tideSeq) return;
         if (!lastTideStationLabel) {
-          paintTideFields({ station: "—", high: "—", low: "—" }, seq);
+          paintTideFields({ station: "—", high: "—", mid: "—", low: "—" }, seq);
         } else {
           // Keep last good station; only times fail
           paintTideFields(
-            { station: lastTideStationLabel, high: "—", low: "—" },
+            { station: lastTideStationLabel, high: "—", mid: "—", low: "—" },
             seq
           );
         }
@@ -1745,11 +1877,7 @@
       el.high.textContent = fmtTime(m.high);
       el.set.textContent = fmtTime(m.set);
 
-      if (previewMode) {
-        cycleDate.innerHTML = `${fmtDateTime(m.when)}<span class="live-tag">Preview</span>`;
-      } else {
-        cycleDate.innerHTML = `${fmtDateTime(m.when)}<span class="live-tag">Live</span>`;
-      }
+      cycleDate.textContent = fmtDateTime(m.when);
 
       // Always nearest NOAA prediction station for observer lat/lon
       updateTides(Number(info.lat), Number(info.lon), m.when);
