@@ -1,6 +1,6 @@
 {
-  "name": "Super Moon",
-  "short_name": "Super Moon",
+  "name": "SuperMoon",
+  "short_name": "SuperMoon",
   "description": "A hi-res 3D Moon you can rotate, zoom, and explore.",
   "start_url": "/",
   "display": "standalone",
