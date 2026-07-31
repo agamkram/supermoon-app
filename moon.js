@@ -1008,7 +1008,7 @@ export function createMoonGlobe(canvas, options = {}) {
       el &&
       el.closest &&
       el.closest(
-        "input,button,select,textarea,a,label,#loc-dialog,.leaflet-container,.loc-dialog,#mission-sheet"
+        "input,button,select,textarea,a,label,#loc-dialog,.leaflet-container,.loc-dialog,#mission-sheet,#fact-sheet,.cycle,.slider-track,.cycle-controls"
       )
     );
   }

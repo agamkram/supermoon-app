@@ -216,9 +216,17 @@
 
     .loc-bar input,
     .loc-bar button,
-    .loc-bar input[type="range"] {
+    .loc-bar input[type="range"],
+    .loc-bar .cycle,
+    .loc-bar .cycle-controls,
+    .loc-bar .slider-track {
       pointer-events: auto;
       touch-action: manipulation;
+    }
+
+    /* Horizontal scrub must win over page/globe pan on iPad Safari */
+    .loc-bar #phase-slider {
+      touch-action: pan-x;
     }
 
     /* Uniform metric cells — equal pad, tight label↔value gap */
@@ -489,30 +497,33 @@
       }
 
       .slider-track {
-        height: 48px;
+        height: 56px;
+        margin: -6px 0;
+        padding: 6px 0;
+        box-sizing: content-box;
       }
 
       #phase-slider {
-        height: 48px;
+        height: 56px;
       }
 
       #phase-slider::-webkit-slider-runnable-track {
-        height: 6px;
+        height: 10px;
       }
 
       #phase-slider::-webkit-slider-thumb {
-        width: 34px;
-        height: 34px;
-        margin-top: -14px;
+        width: 44px;
+        height: 44px;
+        margin-top: -17px;
       }
 
       #phase-slider::-moz-range-track {
-        height: 6px;
+        height: 10px;
       }
 
       #phase-slider::-moz-range-thumb {
-        width: 34px;
-        height: 34px;
+        width: 44px;
+        height: 44px;
       }
     }
 
@@ -1102,37 +1113,41 @@
     }
 
     .slider-track {
+      position: relative;
       flex: 1 1 auto;
       min-width: 0;
-      height: 36px;
+      height: 44px;
       display: flex;
       align-items: center;
+      margin: -4px 0;
+      padding: 4px 0;
+      box-sizing: content-box;
     }
 
     #phase-slider {
       -webkit-appearance: none;
       appearance: none;
       width: 100%;
-      height: 36px;
+      height: 44px;
       margin: 0;
       background: transparent;
       cursor: pointer;
       pointer-events: auto;
-      touch-action: manipulation;
+      touch-action: pan-x;
     }
 
     #phase-slider::-webkit-slider-runnable-track {
-      height: 5px;
-      border-radius: 3px;
+      height: 8px;
+      border-radius: 4px;
       background: rgba(200, 212, 232, 0.28);
     }
 
     #phase-slider::-webkit-slider-thumb {
       -webkit-appearance: none;
       appearance: none;
-      width: 26px;
-      height: 26px;
-      margin-top: -10.5px;
+      width: 28px;
+      height: 28px;
+      margin-top: -10px;
       border-radius: 50%;
       border: 1px solid rgba(255, 255, 255, 0.35);
       background: #e8edf7;
@@ -1140,15 +1155,15 @@
     }
 
     #phase-slider::-moz-range-track {
-      height: 5px;
-      border-radius: 3px;
+      height: 8px;
+      border-radius: 4px;
       background: rgba(200, 212, 232, 0.28);
       border: none;
     }
 
     #phase-slider::-moz-range-thumb {
-      width: 26px;
-      height: 26px;
+      width: 28px;
+      height: 28px;
       border-radius: 50%;
       border: 1px solid rgba(255, 255, 255, 0.35);
       background: #e8edf7;
@@ -1257,17 +1272,17 @@
 
     /* WebKit / Blink range thumb stays white unless styled explicitly */
     body.is-red-mode #phase-slider::-webkit-slider-runnable-track {
-      height: 5px;
-      border-radius: 3px;
+      height: 8px;
+      border-radius: 4px;
       background: var(--red-track);
     }
 
     body.is-red-mode #phase-slider::-webkit-slider-thumb {
       -webkit-appearance: none;
       appearance: none;
-      width: 26px;
-      height: 26px;
-      margin-top: -10.5px;
+      width: 28px;
+      height: 28px;
+      margin-top: -10px;
       border-radius: 50%;
       border: 1px solid #4a0c0c;
       background: var(--red-thumb);
@@ -1275,15 +1290,15 @@
     }
 
     body.is-red-mode #phase-slider::-moz-range-track {
-      height: 5px;
-      border-radius: 3px;
+      height: 8px;
+      border-radius: 4px;
       background: var(--red-track);
       border: none;
     }
 
     body.is-red-mode #phase-slider::-moz-range-thumb {
-      width: 26px;
-      height: 26px;
+      width: 28px;
+      height: 28px;
       border-radius: 50%;
       border: 1px solid #4a0c0c;
       background: var(--red-thumb);
@@ -1292,19 +1307,19 @@
 
     @media (pointer: coarse) and (min-width: 600px) and (min-height: 600px) {
       body.is-red-mode #phase-slider::-webkit-slider-runnable-track {
-        height: 6px;
+        height: 10px;
       }
       body.is-red-mode #phase-slider::-webkit-slider-thumb {
-        width: 34px;
-        height: 34px;
-        margin-top: -14px;
+        width: 44px;
+        height: 44px;
+        margin-top: -17px;
       }
       body.is-red-mode #phase-slider::-moz-range-track {
-        height: 6px;
+        height: 10px;
       }
       body.is-red-mode #phase-slider::-moz-range-thumb {
-        width: 34px;
-        height: 34px;
+        width: 44px;
+        height: 44px;
       }
     }
 
@@ -1538,7 +1553,7 @@
   <script src="astronomy.js"></script>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
   <script type="module">
-    import { createMoonGlobe } from "./moon.js?v=17";
+    import { createMoonGlobe } from "./moon.js?v=18";
 
     const STORAGE_KEY = "moon-globe-loc-v1";
     const TIDE_STATIONS_KEY = "supermoon-noaa-tide-stations-v6";
