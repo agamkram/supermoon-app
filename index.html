@@ -326,6 +326,21 @@
       overflow: hidden;
     }
 
+    button.m-cell-fact {
+      font: inherit;
+      color: inherit;
+      text-align: left;
+      cursor: pointer;
+      -webkit-appearance: none;
+      appearance: none;
+      touch-action: manipulation;
+      width: 100%;
+    }
+
+    button.m-cell-fact:active {
+      background: rgba(28, 36, 48, 0.72);
+    }
+
     .m-cell .k {
       font-size: var(--label-size);
       font-weight: 600;
@@ -920,6 +935,106 @@
       border-color: #3a0c0c;
     }
 
+    body.is-red-mode button.m-cell-fact:active {
+      background: rgba(40, 4, 4, 0.55);
+    }
+
+    /* Fact sheet outside .loc-bar so full-screen overlay receives taps */
+    .fact-sheet {
+      position: fixed;
+      z-index: 20;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      top: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding:
+        max(0.75rem, env(safe-area-inset-top))
+        max(0.75rem, env(safe-area-inset-right))
+        max(0.75rem, env(safe-area-inset-bottom))
+        max(0.75rem, env(safe-area-inset-left));
+      background: rgba(0, 0, 0, 0.62);
+      pointer-events: auto;
+      touch-action: manipulation;
+    }
+
+    .fact-sheet[hidden] {
+      display: none !important;
+    }
+
+    /* Real button behind the card — iOS won't reliably click empty overlay divs */
+    .fact-sheet-scrim {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      padding: 0;
+      border: none;
+      border-radius: 0;
+      background: transparent;
+      cursor: pointer;
+      -webkit-appearance: none;
+      appearance: none;
+      -webkit-tap-highlight-color: transparent;
+      touch-action: manipulation;
+    }
+
+    .fact-sheet-inner {
+      position: relative;
+      z-index: 1;
+      width: min(360px, 100%);
+      padding: 16px 16px 14px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #0c1018;
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.55);
+      pointer-events: auto;
+    }
+
+    .fact-sheet-inner h2 {
+      font-family: var(--font);
+      font-size: 1.05rem;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      margin: 0 0 10px;
+      color: var(--text);
+    }
+
+    .fact-sheet-inner p {
+      font-size: 13px;
+      line-height: 1.45;
+      color: var(--dim);
+      margin: 0 0 12px;
+      white-space: pre-wrap;
+    }
+
+    .fact-sheet-close {
+      margin-top: 4px;
+      width: 100%;
+      border: 1px solid var(--line);
+      background: var(--cell);
+      color: var(--text);
+      font: inherit;
+      font-weight: 600;
+      padding: 9px;
+      border-radius: 7px;
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+
+    body.is-red-mode .fact-sheet-inner {
+      background: #0a0000;
+      border-color: #3a0c0c;
+    }
+
+    body.is-red-mode .fact-sheet-close {
+      background: rgba(40, 4, 4, 0.55);
+      border-color: #3a0c0c;
+    }
+
     body.is-red-mode .loc-dialog {
       background: rgba(2, 0, 0, 0.8);
     }
@@ -1221,53 +1336,53 @@
 
   <div class="loc-bar" id="loc-bar">
     <div class="m-grid" aria-label="Lunar metrics">
-      <div class="m-cell">
+      <button type="button" class="m-cell m-cell-fact" data-fact="phase" title="Tap for explanation">
         <div class="k">Phase</div>
         <div class="v moon" id="m-phase">—</div>
-      </div>
-      <div class="m-cell">
+      </button>
+      <button type="button" class="m-cell m-cell-fact" data-fact="illum" title="Tap for explanation">
         <div class="k">Illuminated</div>
         <div class="v" id="m-illum">—</div>
-      </div>
-      <div class="m-cell">
+      </button>
+      <button type="button" class="m-cell m-cell-fact" data-fact="cycle" title="Tap for explanation">
         <div class="k">Cycle day</div>
         <div class="v sm" id="m-cycle">—</div>
-      </div>
-      <div class="m-cell">
+      </button>
+      <button type="button" class="m-cell m-cell-fact" data-fact="tofull" title="Tap for explanation">
         <div class="k">To full</div>
         <div class="v" id="m-tofull">—</div>
-      </div>
-      <div class="m-cell">
+      </button>
+      <button type="button" class="m-cell m-cell-fact" data-fact="dist" title="Tap for explanation">
         <div class="k">Distance</div>
         <div class="v sm" id="m-dist">—</div>
-      </div>
-      <div class="m-cell">
+      </button>
+      <button type="button" class="m-cell m-cell-fact" data-fact="ang" title="Tap for explanation">
         <div class="k">Angular size</div>
         <div class="v sm" id="m-ang">—</div>
-      </div>
-      <div class="m-cell">
+      </button>
+      <button type="button" class="m-cell m-cell-fact" data-fact="vsavg" title="Tap for explanation">
         <div class="k">vs average</div>
         <div class="v sm" id="m-vsavg">—</div>
-      </div>
-      <div class="m-cell m-cell-tight-x">
+      </button>
+      <button type="button" class="m-cell m-cell-fact m-cell-tight-x" data-fact="vsmax" title="Tap for explanation">
         <div class="k">of yearly max</div>
         <div class="v sm" id="m-vsmax">—</div>
-      </div>
+      </button>
     </div>
     <!-- Row order: metrics 1–2, rise/high/set/red/orbit, tides, location -->
     <div class="m-grid m-grid-rise" aria-label="Moon rise high set and display controls">
-      <div class="m-cell">
+      <button type="button" class="m-cell m-cell-fact" data-fact="rise" title="Tap for explanation">
         <div class="k">Moonrise</div>
         <div class="v sm" id="m-rise">—</div>
-      </div>
-      <div class="m-cell">
+      </button>
+      <button type="button" class="m-cell m-cell-fact" data-fact="high" title="Tap for explanation">
         <div class="k">High moon</div>
         <div class="v sm" id="m-high">—</div>
-      </div>
-      <div class="m-cell">
+      </button>
+      <button type="button" class="m-cell m-cell-fact" data-fact="set" title="Tap for explanation">
         <div class="k">Moonset</div>
         <div class="v sm" id="m-set">—</div>
-      </div>
+      </button>
       <div class="m-cell m-cell-vision">
         <button
           type="button"
@@ -1304,22 +1419,22 @@
       </div>
     </div>
     <div class="m-grid m-grid-3" aria-label="Tides">
-      <div class="m-cell">
+      <button type="button" class="m-cell m-cell-fact" data-fact="station" title="Tap for explanation">
         <div class="k">Nearest tide station</div>
         <div class="v sm" id="m-station">—</div>
-      </div>
-      <div class="m-cell">
+      </button>
+      <button type="button" class="m-cell m-cell-fact" data-fact="htide" title="Tap for explanation">
         <div class="k">High tide</div>
         <div class="v sm" id="m-htide">—</div>
-      </div>
-      <div class="m-cell">
+      </button>
+      <button type="button" class="m-cell m-cell-fact" data-fact="mtide" title="Tap for explanation">
         <div class="k">Mid tide</div>
         <div class="v sm" id="m-mtide">—</div>
-      </div>
-      <div class="m-cell">
+      </button>
+      <button type="button" class="m-cell m-cell-fact" data-fact="ltide" title="Tap for explanation">
         <div class="k">Low tide</div>
         <div class="v sm" id="m-ltide">—</div>
-      </div>
+      </button>
     </div>
 
     <div class="loc-strip">
@@ -1399,10 +1514,20 @@
     </div>
   </div>
 
+  <!-- Outside .loc-bar: parent pointer-events:none blocks full-screen overlay taps -->
+  <div id="fact-sheet" class="fact-sheet" hidden role="dialog" aria-modal="true" aria-labelledby="fact-title">
+    <button type="button" class="fact-sheet-scrim" id="fact-scrim" aria-label="Dismiss explanation"></button>
+    <div class="fact-sheet-inner">
+      <h2 id="fact-title">—</h2>
+      <p id="fact-body">—</p>
+      <button type="button" class="fact-sheet-close" id="fact-close">Close</button>
+    </div>
+  </div>
+
   <script src="astronomy.js"></script>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
   <script type="module">
-    import { createMoonGlobe } from "./moon.js?v=14";
+    import { createMoonGlobe } from "./moon.js?v=17";
 
     const STORAGE_KEY = "moon-globe-loc-v1";
     const TIDE_STATIONS_KEY = "supermoon-noaa-tide-stations-v6";
@@ -1465,6 +1590,164 @@
       high: document.getElementById("m-high"),
       set: document.getElementById("m-set"),
     };
+
+    const PHASE_BLURBS = {
+      "New Moon":
+        "The Moon sits near the Sun in our sky — the sunlit side faces away from Earth, so the disk looks dark.",
+      "Waxing Crescent":
+        "A thin lit crescent is growing after new moon. The bright part is getting larger each night.",
+      "First Quarter":
+        "Half the Earth-facing disk is lit. The Moon is about a quarter of the way through its cycle from new to new.",
+      "Waxing Gibbous":
+        "More than half lit and still growing toward full — bright evenings, climbing later into the night.",
+      "Full Moon":
+        "The whole Earth-facing disk is sunlit. The Moon sits opposite the Sun and is up all night.",
+      "Waning Gibbous":
+        "Still mostly lit, but shrinking after full. You’ll see it later in the night and into morning.",
+      "Last Quarter":
+        "Half lit again, on the way back to new. Often best seen in the predawn sky.",
+      "Waning Crescent":
+        "A thinning crescent heading toward new moon — a delicate morning shape before sunrise.",
+    };
+
+    const FACTS = {
+      phase: {
+        title: "Phase",
+        body: "", // filled from the live box value in openFactSheet
+      },
+      illum: {
+        title: "Illuminated",
+        body:
+          "The fraction of the Moon’s Earth-facing disk that is in sunlight right now.\n\n" +
+          "Near 0% at new moon, near 100% at full. It changes smoothly through the synodic month.",
+      },
+      cycle: {
+        title: "Cycle day",
+        body:
+          "Days since the last new moon, out of this ~29.5-day synodic cycle (new → new).\n\n" +
+          "Left on the slider is the previous new moon; the right is the next. " +
+          "The Live thumb sits on “today” in that cycle.",
+      },
+      tofull: {
+        title: "To full",
+        body:
+          "How long until the next full moon.\n\n" +
+          "That’s when the whole Earth-facing side is sunlit and the Moon is typically brightest overnight.",
+      },
+      dist: {
+        title: "Distance",
+        body:
+          "Earth–Moon distance right now (as shown in the box).\n\n" +
+          "It changes through the month: closest near perigee, farthest near apogee — " +
+          "which is why some full moons look a bit larger (supermoons).",
+      },
+      ang: {
+        title: "Angular size",
+        body:
+          "How wide the Moon appears in Earth’s sky, in arcminutes.\n\n" +
+          "Bigger number = larger disk. It tracks distance: a closer Moon looks bigger.",
+      },
+      vsavg: {
+        title: "vs average",
+        body:
+          "How today’s apparent size compares with a typical (average) value.\n\n" +
+          "Above 100% means the Moon looks larger than usual; below 100% means it’s smaller than that average.",
+      },
+      vsmax: {
+        title: "of yearly max",
+        body:
+          "Today’s angular size as a share of this calendar year’s largest Moon.\n\n" +
+          "Near 100% you’re close to the year’s biggest apparent disk; much lower means you’re well off peak.",
+      },
+      rise: {
+        title: "Moonrise",
+        body:
+          "Local time when the Moon rises above your horizon today.\n\n" +
+          "Uses your chosen location. If the Moon stays below the horizon, you’ll see a dash.",
+      },
+      high: {
+        title: "High moon",
+        body:
+          "Local time when the Moon is highest in your sky (culmination / transit).\n\n" +
+          "Usually the best hour to look — least atmosphere in the way — for your location.",
+      },
+      set: {
+        title: "Moonset",
+        body:
+          "Local time when the Moon sets below your horizon today.\n\n" +
+          "Uses your chosen location. If the Moon doesn’t set (or never rises), you’ll see a dash.",
+      },
+      station: {
+        title: "Nearest tide station",
+        body:
+          "The closest NOAA tide-prediction station to your chosen location.\n\n" +
+          "High, mid, and low times below are drawn from that station’s predictions — " +
+          "not a global model of the open ocean.",
+      },
+      htide: {
+        title: "High tide",
+        body:
+          "The next predicted high tide at the nearest NOAA station (local time).\n\n" +
+          "Real shoreline timing can still differ a bit from the station, especially in bays and inlets.",
+      },
+      mtide: {
+        title: "Mid tide",
+        body:
+          "An estimate of the midpoint in time between the next high and low tides at that station.\n\n" +
+          "It is not a separate NOAA product — a handy halfway mark between highs and lows.",
+      },
+      ltide: {
+        title: "Low tide",
+        body:
+          "The next predicted low tide at the nearest NOAA station (local time).\n\n" +
+          "Useful for beach walks and tide pools; local channels can still run earlier or later than the station.",
+      },
+    };
+
+    const factSheet = document.getElementById("fact-sheet");
+    const factTitle = document.getElementById("fact-title");
+    const factBody = document.getElementById("fact-body");
+    const factClose = document.getElementById("fact-close");
+    const factScrim = document.getElementById("fact-scrim");
+
+    function openFactSheet(key) {
+      const f = FACTS[key];
+      if (!f || !factSheet) return;
+      factTitle.textContent = f.title;
+      if (key === "phase") {
+        const shown = (el.phase?.textContent || "").trim();
+        const blurb =
+          PHASE_BLURBS[shown] ||
+          "Where the Moon sits in its synodic cycle as seen from Earth.";
+        factBody.textContent =
+          shown && shown !== "—"
+            ? `Right now this box shows “${shown}”.\n\n${blurb}\n\nPhase tracks the Sun–Earth–Moon lineup through the ~29.5‑day cycle from one new moon to the next.`
+            : "Phase tracks where the Moon sits in its synodic cycle as seen from Earth — from new through full and back.";
+      } else {
+        factBody.textContent = f.body;
+      }
+      factSheet.hidden = false;
+    }
+
+    function closeFactSheet() {
+      if (factSheet) factSheet.hidden = true;
+    }
+
+    document.querySelectorAll(".m-cell-fact").forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        e.preventDefault();
+        openFactSheet(btn.dataset.fact);
+      });
+    });
+
+    function onFactDismiss(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      closeFactSheet();
+    }
+
+    factClose?.addEventListener("click", onFactDismiss);
+    factScrim?.addEventListener("click", onFactDismiss);
 
     let previewMode = false;
     let previewRaf = 0;
@@ -2191,6 +2474,10 @@
 
     window.addEventListener("keydown", (e) => {
       if (e.key !== "Escape") return;
+      if (factSheet && !factSheet.hidden) {
+        closeFactSheet();
+        return;
+      }
       if (!missionSheet.hidden) {
         closeMissionSheet();
         return;
