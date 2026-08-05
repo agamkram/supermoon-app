@@ -374,11 +374,13 @@ export function createMoonGlobe(canvas, options = {}) {
     for (const site of MISSION_SITES) {
       const tier = site.famous ? "famous" : site.kind === "impact" || site.kind === "attempt" ? "all" : "landing";
       const style =
-        tier === "famous"
-          ? { color: 0xf0d78c, opacity: 0.98, renderOrder: 5 }
-          : tier === "landing"
-            ? { color: 0x68bce8, opacity: 0.9, renderOrder: 4 }
-            : { color: 0x6bbf8a, opacity: 0.95, renderOrder: 3 };
+        typeof site.pinColor === "number"
+          ? { color: site.pinColor, opacity: 0.98, renderOrder: 5 }
+          : tier === "famous"
+            ? { color: 0xf0d78c, opacity: 0.98, renderOrder: 5 }
+            : tier === "landing"
+              ? { color: 0x68bce8, opacity: 0.9, renderOrder: 4 }
+              : { color: 0x6bbf8a, opacity: 0.95, renderOrder: 3 };
       const mat = new THREE.MeshBasicMaterial({
         color: style.color,
         transparent: true,

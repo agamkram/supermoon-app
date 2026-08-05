@@ -624,4 +624,16 @@ export const MISSION_SITES = [
     approximate: true,
     blurb: "The second HAKUTO-R lander lost accurate altitude sensing and made a hard landing in Mare Frigoris.",
   },
+  {
+    id: "f9-2025-010d",
+    name: "Falcon 9 upper stage (2025-010D)",
+    year: 2026,
+    agency: "USA · SpaceX",
+    lat: 19.461,
+    lon: -93.293,
+    kind: "impact",
+    approximate: true,
+    pinColor: 0xe53e3e,
+    blurb: "Spent Falcon 9 second stage (COSPAR 2025-010D) predicted to impact near Einstein crater on the western limb, ~06:35 UTC Aug 5 2026 (~02:35 EDT). Trajectory from Bill Gray / Project Pluto.",
+  },
 ];
