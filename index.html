@@ -2507,9 +2507,12 @@
     }
 
     function startOrbitDefault() {
-      if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-      globe.setOrbiting(true);
-      setOrbitUI(true);
+      // Same path as tapping Orbit (iOS often has Reduce Motion on — don't skip).
+      if (globe.isOrbiting()) {
+        setOrbitUI(true);
+        return;
+      }
+      orbitBtn.click();
     }
 
     orbitBtn.addEventListener("click", (e) => {
