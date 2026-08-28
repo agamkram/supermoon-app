@@ -55,7 +55,7 @@
   <link rel="preload" href="moon-2k.jpg" as="image" type="image/jpeg" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=IBM+Plex+Mono:wght@500;600&family=Michroma&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Michroma&display=swap" rel="stylesheet" />
   <link rel="preconnect" href="https://unpkg.com" crossorigin />
   <link rel="modulepreload" href="https://unpkg.com/three@0.160.0/build/three.module.js" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
@@ -66,14 +66,14 @@
       --muted: #7eb8d8;
       --dim: #6aa8cc;
       --faint: #4a88a8;
-      --cell: rgba(18, 22, 30, 0.58);
-      --panel: rgba(8, 12, 20, 0.72);
-      --line: #2a3140;
+      --cell: transparent;
+      --panel: rgba(18, 22, 30, 0.58);
+      --line: rgba(42, 49, 64, 0.65);
       --moon: #c8d0e0;
-      --mono: "IBM Plex Mono", ui-monospace, monospace;
-      --font: "DM Sans", system-ui, sans-serif;
-      /* Labels: phone + Mac 9.25px; iPad 11px (see tablet media) */
-      --label-size: 9.25px;
+      --mono: "Inter", system-ui, sans-serif;
+      --font: "Inter", system-ui, sans-serif;
+      /* Compact instrument labels */
+      --label-size: 8px;
     }
 
     * { box-sizing: border-box; }
@@ -178,7 +178,7 @@
     /* Same title treatment as Solar Dashboard (Michroma), CamelCase */
     .app-title {
       margin: 0;
-      font-family: "Michroma", "DM Sans", system-ui, sans-serif;
+      font-family: "Michroma", var(--font), system-ui, sans-serif;
       font-weight: 400;
       font-size: clamp(1.05rem, 3.2vmin, 1.35rem); /* match LightSlice title */
       letter-spacing: 0.1em;
@@ -189,9 +189,9 @@
     }
 
     /*
-     * Bottom metrics card (Solar-style cells).
+     * Bottom metrics: one quiet panel, compact instrument rows.
      * pointer-events:none on shell — only controls capture so 2fs works over empty areas.
-     * Moon zooms over this; un-zoom / Live to use the boxes.
+     * Moon zooms over this; un-zoom / Live to use the controls.
      */
     .loc-bar {
       position: fixed;
@@ -203,16 +203,16 @@
       max-width: 430px;
       margin: 0 auto;
       padding:
-        0.15rem
-        max(0.35rem, env(safe-area-inset-right))
-        max(0.35rem, env(safe-area-inset-bottom, 0px))
-        max(0.35rem, env(safe-area-inset-left));
+        0.1rem
+        max(0.3rem, env(safe-area-inset-right))
+        max(0.3rem, env(safe-area-inset-bottom, 0px))
+        max(0.3rem, env(safe-area-inset-left));
       background: transparent;
       pointer-events: none;
       touch-action: none;
       display: flex;
       flex-direction: column;
-      gap: 0.18rem;
+      gap: 0.12rem;
     }
 
     .loc-bar input,
@@ -230,109 +230,135 @@
       touch-action: pan-x;
     }
 
-    /* Uniform metric cells — equal pad, tight label↔value gap */
     :root {
-      --m-row-h: 2.25rem;
-      --m-cell-pad: 3px;
-      --m-cell-gap: 2px;
+      --m-row-h: 1.7rem;
+      --m-cell-pad: 2px 0.4rem;
+      --m-cell-gap: 1px;
+    }
+
+    .metrics-panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 0.18rem 0.14rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.06rem;
+      pointer-events: none;
     }
 
     .m-grid {
       display: grid;
-      grid-template-columns: 1.2fr 0.85fr 1fr 0.9fr;
+      /* Modest Phase bias — keep Illum / Cycle / To full readable */
+      grid-template-columns: 1.35fr 0.9fr 1fr 0.85fr;
       grid-auto-rows: var(--m-row-h);
-      gap: 2px;
+      gap: 0;
       pointer-events: none;
     }
 
-    /* Station + High / Mid / Low — keep tide boxes compact */
+    /* Station bias — tide times stay compact (clock strings) */
     .m-grid-3 {
       grid-template-columns:
-        minmax(0, 1fr)
-        minmax(2.1rem, 0.32fr)
-        minmax(2.1rem, 0.32fr)
-        minmax(2.1rem, 0.32fr);
+        minmax(0, 1.7fr)
+        minmax(3.6rem, 0.38fr)
+        minmax(3.6rem, 0.38fr)
+        minmax(3.6rem, 0.38fr);
       grid-auto-rows: var(--m-row-h);
+      gap: 0;
     }
 
-    /* Rise / high / set + Red + Orbit + Sites */
+    /* Rise / high / set + tool strip (actions ≠ stats) */
     .m-grid-rise {
       grid-template-columns:
-        minmax(0, 1.1fr) minmax(0, 1.1fr) minmax(0, 1.1fr)
-        minmax(2.35rem, 0.48fr) minmax(2.35rem, 0.48fr) minmax(3.75rem, 0.48fr);
+        minmax(0, 0.82fr) minmax(0, 0.82fr) minmax(0, 0.82fr)
+        minmax(9.6rem, 1.4fr);
       grid-auto-rows: var(--m-row-h);
       align-items: stretch;
+      gap: 0;
+    }
+
+    .tool-strip {
+      display: flex;
+      align-items: stretch;
+      gap: 1px;
+      min-width: 9.6rem;
+      width: 100%;
+      padding: 1px;
+      border-radius: 5px;
+      background: rgba(255, 255, 255, 0.05);
+      border: none;
+      pointer-events: auto;
     }
 
     #m-station {
       font-size: 11px;
       line-height: 1.1;
-      letter-spacing: -0.04em;
+      letter-spacing: -0.02em;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
     }
 
-    .m-cell-vision {
-      justify-content: stretch;
-      align-items: stretch;
-      padding: var(--m-cell-pad) !important;
-    }
-
-    /* Off = clear over shared cell chrome (matches other stat boxes) */
     .vision-btn {
-      width: 100%;
+      flex: 1 1 auto;
+      min-width: 2.7rem;
       height: 100%;
       min-height: 0;
       border: none;
-      border-radius: 3px;
+      border-radius: 4px;
       background: transparent;
-      color: var(--text);
-      font-family: "DM Sans", system-ui, sans-serif;
-      font-size: 9px;
+      color: var(--dim);
+      font-family: var(--font);
+      font-size: 8px;
       font-weight: 600;
-      letter-spacing: 0.05em;
+      letter-spacing: 0.04em;
       text-transform: uppercase;
       cursor: pointer;
       touch-action: manipulation;
       line-height: 1;
-      padding: 0;
+      padding: 0 0.45rem;
       -webkit-tap-highlight-color: transparent;
+    }
+
+    #sites-btn {
+      min-width: 3.8rem;
     }
 
     /* On only — no hover “third” look */
     .vision-btn[aria-pressed="true"] {
-      background: rgba(232, 244, 252, 0.22);
+      background: rgba(232, 244, 252, 0.18);
+      color: var(--text);
     }
 
     #sites-btn[data-mode="famous"] {
       color: #f0d78c;
-      background: rgba(240, 215, 140, 0.2);
+      background: rgba(240, 215, 140, 0.18);
     }
 
     #sites-btn[data-mode="landings"] {
       color: #8bcdf0;
-      background: rgba(104, 188, 232, 0.22);
+      background: rgba(104, 188, 232, 0.18);
     }
 
     #sites-btn[data-mode="all"] {
       color: #8fd4a8;
-      background: rgba(107, 191, 138, 0.24);
+      background: rgba(107, 191, 138, 0.2);
     }
 
     body.is-red-mode .vision-btn {
       background: transparent;
-      color: var(--text);
+      color: var(--dim);
     }
 
     body.is-red-mode .vision-btn[aria-pressed="true"] {
       background: rgba(200, 28, 36, 0.55);
+      color: var(--text);
     }
 
     .m-cell {
-      background: var(--cell);
-      border: 1px solid var(--line);
-      border-radius: 6px;
+      background: transparent;
+      border: none;
+      border-radius: 0;
       padding: var(--m-cell-pad);
       min-width: 0;
       min-height: var(--m-row-h);
@@ -340,10 +366,16 @@
       box-sizing: border-box;
       display: flex;
       flex-direction: column;
-      justify-content: space-between;
+      justify-content: center;
       align-items: stretch;
       gap: var(--m-cell-gap);
       overflow: hidden;
+    }
+
+    .m-grid > .m-cell + .m-cell,
+    .m-grid-3 > .m-cell + .m-cell,
+    .m-grid-rise > .m-cell + .m-cell {
+      box-shadow: inset 1px 0 0 rgba(255, 255, 255, 0.05);
     }
 
     button.m-cell-fact {
@@ -358,29 +390,31 @@
     }
 
     button.m-cell-fact:active {
-      background: rgba(28, 36, 48, 0.72);
+      background: rgba(255, 255, 255, 0.05);
     }
 
     .m-cell .k {
       font-size: var(--label-size);
-      font-weight: 600;
-      letter-spacing: 0.03em;
+      font-weight: 500;
+      letter-spacing: 0.02em;
       text-transform: uppercase;
       color: var(--dim);
-      line-height: 1.15;
+      line-height: 1.1;
       flex: 0 0 auto;
       min-width: 0;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
+      opacity: 0.9;
     }
 
     .m-cell .v {
-      font-family: var(--mono);
+      font-family: var(--font);
       font-weight: 600;
-      font-size: 13px;
-      letter-spacing: -0.02em;
-      line-height: 1.1;
+      font-size: 12px;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: -0.01em;
+      line-height: 1.15;
       color: var(--text);
       white-space: nowrap;
       overflow: hidden;
@@ -389,11 +423,11 @@
       min-width: 0;
     }
 
-    .m-cell .v.sm { font-size: 12px; }
+    .m-cell .v.sm { font-size: 11px; }
     .m-cell .v.moon {
       color: var(--moon);
-      font-size: 12px;
-      letter-spacing: -0.03em;
+      font-size: 11px;
+      letter-spacing: -0.015em;
     }
 
     /*
@@ -402,99 +436,106 @@
      */
     @media (pointer: coarse) and (min-width: 600px) and (min-height: 600px) {
       :root {
-        --m-row-h: 2.9rem;
-        --m-cell-pad: 5px;
-        --m-cell-gap: 2px;
-        --label-size: 11px;
+        --m-row-h: 2rem;
+        --m-cell-pad: 3px 0.45rem;
+        --m-cell-gap: 1px;
+        --label-size: 9px;
       }
 
       .loc-bar {
         max-width: 620px;
-        gap: 0.28rem;
+        gap: 0.16rem;
         padding-left: max(0.55rem, env(safe-area-inset-left));
         padding-right: max(0.55rem, env(safe-area-inset-right));
       }
 
-      .m-grid,
-      .m-grid-3,
-      .m-grid-rise {
-        gap: 3px;
+      .metrics-panel {
+        border-radius: 12px;
+        padding: 0.22rem 0.18rem;
+        gap: 0.08rem;
       }
 
-      .m-cell {
-        border-radius: 8px;
+      .m-grid {
+        grid-template-columns: 1.35fr 0.9fr 1fr 0.85fr;
+      }
+
+      .m-grid-3 {
+        grid-template-columns:
+          minmax(0, 1.7fr)
+          minmax(4.1rem, 0.38fr)
+          minmax(4.1rem, 0.38fr)
+          minmax(4.1rem, 0.38fr);
       }
 
       .m-cell .k {
-        letter-spacing: 0.04em;
+        letter-spacing: 0.03em;
       }
 
-      .m-cell .v {
-        font-size: 16px;
-      }
-
-      .m-cell .v.sm {
-        font-size: 15px;
-      }
-
+      .m-cell .v,
+      .m-cell .v.sm,
       .m-cell .v.moon {
-        font-size: 15px;
+        font-size: 13px;
       }
 
       #m-station {
-        font-size: 13px;
+        font-size: 12px;
       }
 
       .m-grid-rise {
         grid-template-columns:
-          minmax(0, 1.1fr) minmax(0, 1.1fr) minmax(0, 1.1fr)
-          minmax(2.9rem, 0.48fr) minmax(2.9rem, 0.48fr) minmax(4.85rem, 0.48fr);
+          minmax(0, 0.82fr) minmax(0, 0.82fr) minmax(0, 0.82fr)
+          minmax(11rem, 1.4fr);
       }
 
       .vision-btn {
-        font-size: 12px;
-        border-radius: 6px;
+        font-size: 10px;
+        min-width: 2.8rem;
+        padding: 0 0.45rem;
+      }
+
+      #sites-btn {
+        min-width: 4.2rem;
       }
 
       .loc-strip {
-        gap: 3px;
+        gap: 0;
       }
 
       .loc-card {
-        max-height: 3.2rem;
-        border-radius: 8px;
+        max-height: 2.35rem;
+        border-radius: 0;
       }
 
       .loc-place-row {
-        min-height: 1.45rem;
-        height: 1.45rem;
-        gap: 0.35rem;
+        min-height: 1.2rem;
+        height: 1.2rem;
+        gap: 0.3rem;
       }
 
       .loc-coords {
-        font-size: 15px;
+        font-size: 13px;
       }
 
       .loc-place-row button,
       .geo-btn,
       .hemi button {
-        font-size: 12px;
-        min-height: 1.45rem;
+        font-size: 10px;
+        min-height: 1.2rem;
       }
 
       .hemi {
-        min-height: 1.45rem;
-        height: 1.45rem;
+        min-height: 1.2rem;
+        height: 1.2rem;
       }
 
       .cycle-date {
-        font-size: 14px;
+        font-size: 13px;
       }
 
       .live-btn {
-        font-size: 12px;
-        min-height: 1.55rem;
-        padding: 0 0.65rem;
+        font-size: 11px;
+        min-height: 1.4rem;
+        padding: 0 0.55rem;
       }
 
       .slider-track {
@@ -550,43 +591,39 @@
       }
 
       :root {
-        --m-row-h: 1.55rem;
-        --m-cell-pad: 2px;
-        --m-cell-gap: 1px;
-        --label-size: 7px;
+        --m-row-h: 1.35rem;
+        --m-cell-pad: 1px 0.28rem;
+        --m-cell-gap: 0;
+        --label-size: 6.5px;
       }
 
-      .m-grid,
-      .m-grid-3,
-      .m-grid-rise {
-        gap: 1px;
+      .metrics-panel {
+        gap: 0.06rem;
       }
 
-      .m-cell {
-        border-radius: 4px;
-      }
-
-      .m-cell .v {
-        font-size: 10px;
-      }
-
+      .m-cell .v,
       .m-cell .v.sm,
       .m-cell .v.moon {
         font-size: 9px;
       }
 
+      .vision-btn {
+        font-size: 7px;
+        min-width: 2rem;
+        padding: 0 0.25rem;
+      }
+
+      #sites-btn {
+        min-width: 2.8rem;
+      }
+
       .loc-strip {
-        gap: 2px;
+        gap: 0;
       }
 
       .cycle {
         padding: 0.06rem 0.22rem 0.02rem;
         gap: 0.06rem;
-      }
-
-      .m-cell-tight-x {
-        padding-left: 1px;
-        padding-right: 1px;
       }
     }
 
@@ -595,32 +632,30 @@
       .cycle {
         padding-bottom: 1px;
       }
-
-      .m-cell-tight-x {
-        padding-left: 1px;
-        padding-right: 1px;
-      }
     }
 
     /* Compact location + hemi row (desktop was ballooning under the cycle slider) */
     .loc-strip {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 2px;
+      gap: 0;
       flex: 0 0 auto;
       align-items: stretch;
       min-height: 0;
+      margin-top: 0.06rem;
+      padding-top: 0.06rem;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
     }
 
     .loc-card {
       display: flex;
-      background: var(--cell);
-      border: 1px solid var(--line);
-      border-radius: 6px;
+      background: transparent;
+      border: none;
+      border-radius: 0;
       min-width: 0;
       min-height: 0;
       height: auto;
-      max-height: 2.55rem;
+      max-height: 2.05rem;
       box-sizing: border-box;
     }
 
@@ -629,8 +664,12 @@
       flex-direction: column;
       align-items: stretch;
       justify-content: space-between;
-      gap: var(--m-cell-gap);
-      padding: var(--m-cell-pad);
+      gap: 0.12rem;
+      padding: 0.12rem 0.35rem;
+    }
+
+    .loc-card.hemi-card {
+      box-shadow: inset 1px 0 0 rgba(255, 255, 255, 0.05);
     }
 
     .loc-label,
@@ -662,10 +701,11 @@
     }
 
     .loc-coords {
-      font-family: var(--mono);
+      font-family: var(--font);
       font-size: 11px;
       font-weight: 600;
-      letter-spacing: -0.02em;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: -0.01em;
       line-height: 1.1;
       flex: 1 1 auto;
       min-width: 0;
@@ -721,11 +761,11 @@
     }
 
     .loc-card button {
-      border: 1px solid var(--line);
-      border-radius: 6px;
-      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 5px;
+      background: rgba(255, 255, 255, 0.06);
       color: var(--text);
-      font-family: "DM Sans", system-ui, sans-serif;
+      font-family: var(--font);
       font-size: 8px;
       font-weight: 600;
       letter-spacing: 0.03em;
@@ -737,11 +777,11 @@
     }
 
     .hemi button {
-      border: 1px solid var(--line);
-      border-radius: 6px;
-      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 5px;
+      background: rgba(255, 255, 255, 0.06);
       color: var(--text);
-      font-family: "DM Sans", system-ui, sans-serif;
+      font-family: var(--font);
       font-weight: 600;
       text-transform: uppercase;
       cursor: pointer;
@@ -827,7 +867,7 @@
       border-radius: 6px;
       background: rgba(255, 255, 255, 0.06);
       color: var(--text);
-      font-family: "DM Sans", system-ui, sans-serif;
+      font-family: var(--font);
       font-size: 10px;
       font-weight: 600;
       letter-spacing: 0.04em;
@@ -860,9 +900,10 @@
     }
 
     .loc-map-coords {
-      font-family: var(--mono);
+      font-family: var(--font);
       font-size: 11px;
       font-weight: 600;
+      font-variant-numeric: tabular-nums;
       color: var(--text);
       min-width: 0;
       overflow: hidden;
@@ -917,9 +958,10 @@
 
     .mission-sheet-meta {
       margin: 0;
-      font-family: var(--mono);
+      font-family: var(--font);
       font-size: 11px;
       font-weight: 600;
+      font-variant-numeric: tabular-nums;
       color: var(--dim);
       letter-spacing: -0.01em;
     }
@@ -1081,22 +1123,23 @@
     }
 
     .cycle {
-      background: var(--cell);
+      background: var(--panel);
       border: 1px solid var(--line);
-      border-radius: 6px;
-      padding: 0.12rem 0.28rem 0.14rem;
+      border-radius: 10px;
+      padding: 0.1rem 0.28rem 0.1rem;
       display: grid;
-      gap: 0.12rem;
+      gap: 0.08rem;
       flex: 0 0 auto;
       position: relative;
       z-index: 2;
     }
 
     .cycle-date {
-      font-family: var(--mono);
+      font-family: var(--font);
       font-size: 11px;
       font-weight: 600;
-      letter-spacing: -0.02em;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: -0.01em;
       color: var(--text);
       line-height: 1.05;
       white-space: nowrap;
@@ -1178,7 +1221,7 @@
       padding: 0.28rem 0.55rem;
       background: rgba(255, 255, 255, 0.1);
       color: var(--text);
-      font-family: "DM Sans", system-ui, sans-serif;
+      font-family: var(--font);
       font-size: 10px;
       font-weight: 600;
       letter-spacing: 0.04em;
@@ -1244,6 +1287,12 @@
 
     body.is-red-mode .loc-bar {
       background: transparent;
+    }
+
+    body.is-red-mode .metrics-panel,
+    body.is-red-mode .cycle {
+      border-color: #3a0c0c;
+      background: rgba(40, 4, 4, 0.45);
     }
 
     body.is-red-mode .live-btn,
@@ -1362,135 +1411,133 @@
   <p class="status" id="status" data-state="loading">Loading surface…</p>
 
   <div class="loc-bar" id="loc-bar">
-    <div class="m-grid" aria-label="Lunar metrics">
-      <button type="button" class="m-cell m-cell-fact" data-fact="phase" title="Tap for explanation">
-        <div class="k">Phase</div>
-        <div class="v moon" id="m-phase">—</div>
-      </button>
-      <button type="button" class="m-cell m-cell-fact" data-fact="illum" title="Tap for explanation">
-        <div class="k">Illuminated</div>
-        <div class="v" id="m-illum">—</div>
-      </button>
-      <button type="button" class="m-cell m-cell-fact" data-fact="cycle" title="Tap for explanation">
-        <div class="k">Cycle day</div>
-        <div class="v sm" id="m-cycle">—</div>
-      </button>
-      <button type="button" class="m-cell m-cell-fact" data-fact="tofull" title="Tap for explanation">
-        <div class="k">To full</div>
-        <div class="v" id="m-tofull">—</div>
-      </button>
-      <button type="button" class="m-cell m-cell-fact" data-fact="dist" title="Tap for explanation">
-        <div class="k">Distance</div>
-        <div class="v sm" id="m-dist">—</div>
-      </button>
-      <button type="button" class="m-cell m-cell-fact" data-fact="ang" title="Tap for explanation">
-        <div class="k">Angular size</div>
-        <div class="v sm" id="m-ang">—</div>
-      </button>
-      <button type="button" class="m-cell m-cell-fact" data-fact="vsavg" title="Tap for explanation">
-        <div class="k">vs average</div>
-        <div class="v sm" id="m-vsavg">—</div>
-      </button>
-      <button type="button" class="m-cell m-cell-fact m-cell-tight-x" data-fact="vsmax" title="Tap for explanation">
-        <div class="k">of yearly max</div>
-        <div class="v sm" id="m-vsmax">—</div>
-      </button>
-    </div>
-    <!-- Row order: metrics 1–2, rise/high/set/red/orbit, tides, location -->
-    <div class="m-grid m-grid-rise" aria-label="Moon rise high set and display controls">
-      <button type="button" class="m-cell m-cell-fact" data-fact="rise" title="Tap for explanation">
-        <div class="k">Moonrise</div>
-        <div class="v sm" id="m-rise">—</div>
-      </button>
-      <button type="button" class="m-cell m-cell-fact" data-fact="high" title="Tap for explanation">
-        <div class="k">High moon</div>
-        <div class="v sm" id="m-high">—</div>
-      </button>
-      <button type="button" class="m-cell m-cell-fact" data-fact="set" title="Tap for explanation">
-        <div class="k">Moonset</div>
-        <div class="v sm" id="m-set">—</div>
-      </button>
-      <div class="m-cell m-cell-vision">
-        <button
-          type="button"
-          class="vision-btn"
-          id="vision-btn"
-          title="Night vision: red display for dark-adapted eyes"
-          aria-pressed="false"
-        >
-          Red
+    <div class="metrics-panel">
+      <div class="m-grid" aria-label="Lunar metrics">
+        <button type="button" class="m-cell m-cell-fact" data-fact="phase" title="Tap for explanation">
+          <div class="k">Phase</div>
+          <div class="v moon" id="m-phase">—</div>
+        </button>
+        <button type="button" class="m-cell m-cell-fact" data-fact="illum" title="Tap for explanation">
+          <div class="k">Illuminated</div>
+          <div class="v" id="m-illum">—</div>
+        </button>
+        <button type="button" class="m-cell m-cell-fact" data-fact="cycle" title="Tap for explanation">
+          <div class="k">Cycle day</div>
+          <div class="v sm" id="m-cycle">—</div>
+        </button>
+        <button type="button" class="m-cell m-cell-fact" data-fact="tofull" title="Tap for explanation">
+          <div class="k">To full</div>
+          <div class="v" id="m-tofull">—</div>
+        </button>
+        <button type="button" class="m-cell m-cell-fact" data-fact="dist" title="Tap for explanation">
+          <div class="k">Distance</div>
+          <div class="v sm" id="m-dist">—</div>
+        </button>
+        <button type="button" class="m-cell m-cell-fact" data-fact="ang" title="Tap for explanation">
+          <div class="k">Angular size</div>
+          <div class="v sm" id="m-ang">—</div>
+        </button>
+        <button type="button" class="m-cell m-cell-fact" data-fact="vsavg" title="Tap for explanation">
+          <div class="k">vs average</div>
+          <div class="v sm" id="m-vsavg">—</div>
+        </button>
+        <button type="button" class="m-cell m-cell-fact" data-fact="vsmax" title="Tap for explanation">
+          <div class="k">of yearly max</div>
+          <div class="v sm" id="m-vsmax">—</div>
         </button>
       </div>
-      <div class="m-cell m-cell-vision">
-        <button
-          type="button"
-          class="vision-btn"
-          id="orbit-btn"
-          title="Slow continuous moon orbit (tap again to stop)"
-          aria-pressed="false"
-        >
-          Orbit
+      <!-- Row order: metrics, rise/high/set + tools, tides, location -->
+      <div class="m-grid m-grid-rise" aria-label="Moon rise high set and display controls">
+        <button type="button" class="m-cell m-cell-fact" data-fact="rise" title="Tap for explanation">
+          <div class="k">Moonrise</div>
+          <div class="v sm" id="m-rise">—</div>
         </button>
-      </div>
-      <div class="m-cell m-cell-vision">
-        <button
-          type="button"
-          class="vision-btn"
-          id="sites-btn"
-          title="Show mission sites: Famous, Landings, then All"
-          aria-pressed="false"
-          data-mode="off"
-        >
-          Missions
+        <button type="button" class="m-cell m-cell-fact" data-fact="high" title="Tap for explanation">
+          <div class="k">High moon</div>
+          <div class="v sm" id="m-high">—</div>
         </button>
-      </div>
-    </div>
-    <div class="m-grid m-grid-3" aria-label="Tides">
-      <button type="button" class="m-cell m-cell-fact" data-fact="station" title="Tap for explanation">
-        <div class="k">Nearest tide station</div>
-        <div class="v sm" id="m-station">—</div>
-      </button>
-      <button type="button" class="m-cell m-cell-fact" data-fact="htide" title="Tap for explanation">
-        <div class="k">High tide</div>
-        <div class="v sm" id="m-htide">—</div>
-      </button>
-      <button type="button" class="m-cell m-cell-fact" data-fact="mtide" title="Tap for explanation">
-        <div class="k">Mid tide</div>
-        <div class="v sm" id="m-mtide">—</div>
-      </button>
-      <button type="button" class="m-cell m-cell-fact" data-fact="ltide" title="Tap for explanation">
-        <div class="k">Low tide</div>
-        <div class="v sm" id="m-ltide">—</div>
-      </button>
-    </div>
-
-    <div class="loc-strip">
-      <div class="loc-card loc-card-place">
-        <div class="loc-label" id="loc-label">Current location</div>
-        <div class="loc-place-row">
-          <div class="loc-coords" id="loc-coords">—</div>
-          <button type="button" id="edit-btn" title="Choose location on map">Edit</button>
+        <button type="button" class="m-cell m-cell-fact" data-fact="set" title="Tap for explanation">
+          <div class="k">Moonset</div>
+          <div class="v sm" id="m-set">—</div>
+        </button>
+        <div class="tool-strip" role="group" aria-label="Display controls">
           <button
             type="button"
-            class="geo-btn"
-            id="geo-btn"
-            title="Use device location"
-            aria-label="Use device location"
+            class="vision-btn"
+            id="vision-btn"
+            title="Night vision: red display for dark-adapted eyes"
+            aria-pressed="false"
           >
-            <!-- Classic maps locate-me crosshair -->
-            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-              <circle cx="12" cy="12" r="3" />
-              <circle cx="12" cy="12" r="8" />
-              <path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22" />
-            </svg>
+            Red
+          </button>
+          <button
+            type="button"
+            class="vision-btn"
+            id="orbit-btn"
+            title="Slow continuous moon orbit (tap again to stop)"
+            aria-pressed="false"
+          >
+            Orbit
+          </button>
+          <button
+            type="button"
+            class="vision-btn"
+            id="sites-btn"
+            title="Show mission sites: Famous, Landings, then All"
+            aria-pressed="false"
+            data-mode="off"
+          >
+            Missions
           </button>
         </div>
       </div>
-      <div class="loc-card hemi-card">
-        <span class="hemi-label">Hemisphere</span>
-        <div class="hemi" role="group" aria-label="Hemisphere">
-          <button type="button" id="hemi-n" class="active">Northern</button>
-          <button type="button" id="hemi-s">Southern</button>
+      <div class="m-grid m-grid-3" aria-label="Tides">
+        <button type="button" class="m-cell m-cell-fact" data-fact="station" title="Tap for explanation">
+          <div class="k">Nearest tide station</div>
+          <div class="v sm" id="m-station">—</div>
+        </button>
+        <button type="button" class="m-cell m-cell-fact" data-fact="htide" title="Tap for explanation">
+          <div class="k">High tide</div>
+          <div class="v sm" id="m-htide">—</div>
+        </button>
+        <button type="button" class="m-cell m-cell-fact" data-fact="mtide" title="Tap for explanation">
+          <div class="k">Mid tide</div>
+          <div class="v sm" id="m-mtide">—</div>
+        </button>
+        <button type="button" class="m-cell m-cell-fact" data-fact="ltide" title="Tap for explanation">
+          <div class="k">Low tide</div>
+          <div class="v sm" id="m-ltide">—</div>
+        </button>
+      </div>
+
+      <div class="loc-strip">
+        <div class="loc-card loc-card-place">
+          <div class="loc-label" id="loc-label">Current location</div>
+          <div class="loc-place-row">
+            <div class="loc-coords" id="loc-coords">—</div>
+            <button type="button" id="edit-btn" title="Choose location on map">Edit</button>
+            <button
+              type="button"
+              class="geo-btn"
+              id="geo-btn"
+              title="Use device location"
+              aria-label="Use device location"
+            >
+              <!-- Classic maps locate-me crosshair -->
+              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <circle cx="12" cy="12" r="3" />
+                <circle cx="12" cy="12" r="8" />
+                <path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22" />
+              </svg>
+            </button>
+          </div>
+        </div>
+        <div class="loc-card hemi-card">
+          <span class="hemi-label">Hemisphere</span>
+          <div class="hemi" role="group" aria-label="Hemisphere">
+            <button type="button" id="hemi-n" class="active">Northern</button>
+            <button type="button" id="hemi-s">Southern</button>
+          </div>
         </div>
       </div>
     </div>
@@ -2712,6 +2759,7 @@
     function requestUserLocation({ force = false } = {}) {
       if (!navigator.geolocation) {
         if (force) openLocationDialog();
+        else if (!loadSavedLoc()) locCoords.textContent = "Tap locate or Edit";
         return;
       }
       // Browsers block GPS on plain http://LAN-IP — need https (or localhost)
@@ -2722,8 +2770,13 @@
         location.hostname !== "127.0.0.1"
       ) {
         locCoords.title =
-          "GPS needs HTTPS. Use the locate icon after trusting the local cert, or Edit map.";
+          "GPS needs HTTPS on this device. Tap locate on Mac/localhost, or Edit map.";
+        if (!loadSavedLoc() && !force) {
+          locCoords.textContent = "Tap locate or Edit";
+          return;
+        }
       }
+      if (!loadSavedLoc()) locCoords.textContent = "Locating…";
       navigator.geolocation.getCurrentPosition(
         (pos) => {
           applyLocation(pos.coords.latitude, pos.coords.longitude, "gps");
@@ -2731,23 +2784,25 @@
         },
         () => {
           if (force) openLocationDialog();
+          else if (!loadSavedLoc()) locCoords.textContent = "Tap locate or Edit";
         },
         { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 }
       );
     }
 
-    // Boot: saved place first (instant), then always try GPS to refine
+    // Boot: GPS is the home place — never open the map picker automatically.
+    // Saved coords are an instant stand-in while GPS resolves.
     const saved = loadSavedLoc();
     if (saved) {
-      // Keep prior source if stored (gps vs map/hemi); default to chosen
       applyLocation(saved.lat, saved.lon, saved.source || "saved");
     } else {
-      applyLocation(0, 0, "default");
+      locCoords.textContent = "Locating…";
+      if (locLabel) locLabel.textContent = "Current location";
     }
     goLive();
     requestAnimationFrame(() => {
       goLive();
-      requestUserLocation({ force: !saved });
+      requestUserLocation({ force: false });
     });
 
     setInterval(() => {
