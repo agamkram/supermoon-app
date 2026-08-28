@@ -1605,6 +1605,8 @@
 
     const STORAGE_KEY = "moon-globe-loc-v1";
     const TIDE_STATIONS_KEY = "supermoon-noaa-tide-stations-v6";
+    /** Used when GPS/permission unavailable (X in-app browser, denied, etc.) */
+    const DEFAULT_LOC = { lat: 35.5956, lon: -82.5519, name: "Asheville, NC" };
     /** Name tokens that mark inland / river gauges — drop from nearest pick */
     const INLAND_STATION_RE =
       /\b(creek|bayou|slough|plantation|drawbridge|highway bridge|railroad bridge|mi\.?\s*above|miles?\s+above|above\s+(entrance|mouth)|ferry landing)\b/i;
@@ -2398,9 +2400,14 @@
 
     function setLocationTitle(source) {
       if (!locLabel) return;
-      // GPS / device locate → “Current”; map pick, hemi test, saved non-GPS → “Chosen”
-      const isCurrent = source === "gps";
-      locLabel.textContent = isCurrent ? "Current location" : "Chosen location";
+      // GPS → Current; baked-in fallback → Default; map/hemi/saved → Chosen
+      if (source === "gps") locLabel.textContent = "Current location";
+      else if (source === "default") locLabel.textContent = "Default location";
+      else locLabel.textContent = "Chosen location";
+    }
+
+    function applyDefaultLocation() {
+      applyLocation(DEFAULT_LOC.lat, DEFAULT_LOC.lon, "default");
     }
 
     function showLoc(lat, lon, source) {
@@ -2759,7 +2766,7 @@
     function requestUserLocation({ force = false } = {}) {
       if (!navigator.geolocation) {
         if (force) openLocationDialog();
-        else if (!loadSavedLoc()) locCoords.textContent = "Tap locate or Edit";
+        else if (!loadSavedLoc()) applyDefaultLocation();
         return;
       }
       // Browsers block GPS on plain http://LAN-IP — need https (or localhost)
@@ -2772,11 +2779,10 @@
         locCoords.title =
           "GPS needs HTTPS on this device. Tap locate on Mac/localhost, or Edit map.";
         if (!loadSavedLoc() && !force) {
-          locCoords.textContent = "Tap locate or Edit";
+          applyDefaultLocation();
           return;
         }
       }
-      if (!loadSavedLoc()) locCoords.textContent = "Locating…";
       navigator.geolocation.getCurrentPosition(
         (pos) => {
           applyLocation(pos.coords.latitude, pos.coords.longitude, "gps");
@@ -2784,20 +2790,19 @@
         },
         () => {
           if (force) openLocationDialog();
-          else if (!loadSavedLoc()) locCoords.textContent = "Tap locate or Edit";
+          else if (!loadSavedLoc()) applyDefaultLocation();
         },
         { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 }
       );
     }
 
-    // Boot: GPS is the home place — never open the map picker automatically.
-    // Saved coords are an instant stand-in while GPS resolves.
+    // Boot: saved or Asheville default first; GPS refines when allowed.
+    // Never open the map picker automatically (X / denied permission stay usable).
     const saved = loadSavedLoc();
     if (saved) {
       applyLocation(saved.lat, saved.lon, saved.source || "saved");
     } else {
-      locCoords.textContent = "Locating…";
-      if (locLabel) locLabel.textContent = "Current location";
+      applyDefaultLocation();
     }
     goLive();
     requestAnimationFrame(() => {
