@@ -90,6 +90,15 @@
       font-family: var(--font);
       -webkit-text-size-adjust: 100%;
       touch-action: none;
+      -webkit-user-select: none;
+      user-select: none;
+      -webkit-touch-callout: none;
+    }
+
+    input,
+    textarea {
+      -webkit-user-select: text;
+      user-select: text;
     }
 
     /*
@@ -2583,6 +2592,19 @@
     missionSheet.addEventListener("click", (e) => {
       if (e.target === missionSheet) closeMissionSheet();
     });
+
+    // Block copy / select (showcase PWA); inputs still selectable via CSS
+    for (const evt of ["copy", "cut", "selectstart"]) {
+      document.addEventListener(
+        evt,
+        (e) => {
+          const t = e.target;
+          if (t && (t.closest?.("input,textarea") || t.isContentEditable)) return;
+          e.preventDefault();
+        },
+        { capture: true }
+      );
+    }
 
     window.addEventListener("keydown", (e) => {
       if (e.key !== "Escape") return;
