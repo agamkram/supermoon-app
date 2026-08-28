@@ -1554,7 +1554,7 @@
   <script src="astronomy.js"></script>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
   <script type="module">
-    import { createMoonGlobe } from "./moon.js?v=18";
+    import { createMoonGlobe } from "./moon.js?v=20";
 
     const STORAGE_KEY = "moon-globe-loc-v1";
     const TIDE_STATIONS_KEY = "supermoon-noaa-tide-stations-v6";
@@ -1635,6 +1635,12 @@
         "Half lit again, on the way back to new. Often best seen in the predawn sky.",
       "Waning Crescent":
         "A thinning crescent heading toward new moon — a delicate morning shape before sunrise.",
+      "Penumbral eclipse":
+        "The Moon is full and passing through Earth’s outer shadow (the penumbra). The disk stays fully “in phase,” but sunlight is faintly muted — often a subtle shading rather than a bite.",
+      "Partial eclipse":
+        "The Moon is full and part of it is inside Earth’s dark umbra. You’ll see a curved shadow eat across the disk while the rest stays bright — then reverse as it exits.",
+      "Total eclipse":
+        "The whole Moon is inside Earth’s umbra. Direct sunlight is blocked; what’s left is sunlight bent through Earth’s atmosphere, often turning the disk copper or red (a “blood moon”).",
     };
 
     const FACTS = {
@@ -1645,8 +1651,8 @@
       illum: {
         title: "Illuminated",
         body:
-          "The fraction of the Moon’s Earth-facing disk that is in sunlight right now.\n\n" +
-          "Near 0% at new moon, near 100% at full. It changes smoothly through the synodic month.",
+          "The fraction of the Moon’s Earth-facing disk that is in direct sunlight right now.\n\n" +
+          "Near 0% at new moon, near 100% at full. Through a lunar eclipse this drops as Earth’s umbra covers the disk — even though the phase is still full.",
       },
       cycle: {
         title: "Cycle day",
@@ -1746,10 +1752,22 @@
         const blurb =
           PHASE_BLURBS[shown] ||
           "Where the Moon sits in its synodic cycle as seen from Earth.";
+        const eclipseNote = /eclipse/i.test(shown)
+          ? "\n\nEclipse labels appear when Earth’s shadow lies across the full Moon; the synodic phase is still full."
+          : "\n\nPhase tracks the Sun–Earth–Moon lineup through the ~29.5‑day cycle from one new moon to the next.";
         factBody.textContent =
           shown && shown !== "—"
-            ? `Right now this box shows “${shown}”.\n\n${blurb}\n\nPhase tracks the Sun–Earth–Moon lineup through the ~29.5‑day cycle from one new moon to the next.`
+            ? `Right now this box shows “${shown}”.\n\n${blurb}${eclipseNote}`
             : "Phase tracks where the Moon sits in its synodic cycle as seen from Earth — from new through full and back.";
+      } else if (key === "illum") {
+        const shown = (el.illum?.textContent || "").trim();
+        const phaseShown = (el.phase?.textContent || "").trim();
+        const inEclipse = /eclipse/i.test(phaseShown);
+        factBody.textContent = inEclipse
+          ? `Right now this box shows “${shown || "—"}”.\n\n` +
+            "During a lunar eclipse, Illuminated is the share of the Earth-facing disk still in direct sunlight — it falls as Earth’s umbra covers the Moon, even though the phase is full.\n\n" +
+            "Outside eclipse, it is the usual phase illumination (near 0% at new, near 100% at full)."
+          : f.body;
       } else {
         factBody.textContent = f.body;
       }
@@ -2210,6 +2228,10 @@
       const lon = Number(info.lon);
       const phase01 = Number(info.phase01) || 0;
       const frac = Number(info.fraction);
+      const illuminated = Number.isFinite(Number(info.illuminated))
+        ? Number(info.illuminated)
+        : frac;
+      const eclipse = info.eclipse || null;
 
       let distKm = NaN;
       let ang = NaN;
@@ -2262,6 +2284,8 @@
       return {
         name: info.name || "—",
         frac,
+        illuminated,
+        eclipse,
         phase01,
         cycleDay: phase01 * SYNODIC,
         daysToFull,
@@ -2286,8 +2310,8 @@
       }
 
       el.phase.textContent = m.name;
-      el.illum.textContent = Number.isFinite(m.frac)
-        ? `${Math.round(m.frac * 100)}%`
+      el.illum.textContent = Number.isFinite(m.illuminated)
+        ? `${Math.round(m.illuminated * 100)}%`
         : "—";
       el.cycle.textContent = `${m.cycleDay.toFixed(1)}/${SYNODIC.toFixed(1)}`;
       el.tofull.textContent = Number.isFinite(m.daysToFull)
@@ -2574,6 +2598,7 @@
       }
       goLive();
     }
+
     // click + pointerup: iOS sometimes eats click after touch-action wars
     liveBtn.addEventListener("click", onLiveActivate);
     liveBtn.addEventListener(

@@ -129,6 +129,174 @@ const _yAxis = new THREE.Vector3();
 const _zAxis = new THREE.Vector3();
 const _worldUp = new THREE.Vector3(0, 0, 1);
 const _camDir = new THREE.Vector3();
+const _eclAxis = new THREE.Vector3();
+const _eclOffset = new THREE.Vector3();
+const _viewZ = new THREE.Vector3(0, 0, 1);
+const _keyColor = new THREE.Color(0xfff2e6);
+const _keyEclipse = new THREE.Color(0xff6a3a);
+
+const EARTH_R_KM = 6371;
+const SUN_R_KM = 695700;
+const MOON_R_KM = 1737.4;
+
+/** Fraction of moon disk covered by a circular shadow (0…1). */
+function diskOverlapFraction(rMoon, rShadow, d) {
+  if (!(rMoon > 0) || !(rShadow > 0)) return 0;
+  if (d >= rMoon + rShadow) return 0;
+  if (d <= Math.abs(rShadow - rMoon)) {
+    return rShadow >= rMoon ? 1 : (rShadow * rShadow) / (rMoon * rMoon);
+  }
+  const r = rMoon;
+  const R = rShadow;
+  const a = (r * r - R * R + d * d) / (2 * d);
+  const h = Math.sqrt(Math.max(0, r * r - a * a));
+  return (
+    (r * r * Math.acos(Math.min(1, Math.max(-1, a / r))) -
+      a * h +
+      R * R * Math.acos(Math.min(1, Math.max(-1, (d - a) / R))) -
+      (d - a) * h) /
+    (Math.PI * r * r)
+  );
+}
+
+/** @type {null | { peakMs: number, kind: string, obscuration: number, sd_penum: number, sd_partial: number, sd_total: number }} */
+let _eclipseCatalog = null;
+
+function catalogLunarEclipse(A, when) {
+  const t = when.getTime();
+  const cat = _eclipseCatalog;
+  if (
+    cat &&
+    Math.abs(t - cat.peakMs) < (cat.sd_penum + 180) * 60e3
+  ) {
+    return cat;
+  }
+  try {
+    // Search from a day earlier so “now” during an eclipse still finds this event
+    let info = A.SearchLunarEclipse(new Date(t - 864e5));
+    if (!info || !info.peak) return null;
+    let peakMs = info.peak.date.getTime();
+    // If this peak is far in the past relative to penumbra, step forward
+    if (t - peakMs > (info.sd_penum + 60) * 60e3) {
+      info = A.NextLunarEclipse(info.peak.date);
+      if (!info || !info.peak) return null;
+      peakMs = info.peak.date.getTime();
+    }
+    _eclipseCatalog = {
+      peakMs,
+      kind: info.kind,
+      obscuration: Number(info.obscuration) || 0,
+      sd_penum: Number(info.sd_penum) || 0,
+      sd_partial: Number(info.sd_partial) || 0,
+      sd_total: Number(info.sd_total) || 0,
+    };
+    return _eclipseCatalog;
+  } catch (_) {
+    return null;
+  }
+}
+
+/**
+ * Earth umbra/penumbra on the Moon at `when`.
+ * Face axes must match lighting (_xAxis/_yAxis/_zAxis) before skyRoll.
+ */
+function computeLunarEclipse(A, when, xAxis, yAxis, zAxis) {
+  const empty = {
+    active: false,
+    stage: "none",
+    umbralObscuration: 0,
+    penumbral: 0,
+    ox: 0,
+    oy: 0,
+    uR: 0,
+    pR: 0,
+    kind: null,
+    peak: null,
+    catalogObscuration: 0,
+  };
+  if (!A) return empty;
+
+  const time = A.MakeTime(when);
+  const sun = A.GeoVector(A.Body.Sun, time, false);
+  const moon = A.GeoVector(A.Body.Moon, time, false);
+  const sLen = Math.hypot(sun.x, sun.y, sun.z);
+  const mLen = Math.hypot(moon.x, moon.y, moon.z);
+  if (!(sLen > 0) || !(mLen > 0)) return empty;
+
+  // Umbra axis from Earth toward anti-sun
+  _eclAxis.set(-sun.x / sLen, -sun.y / sLen, -sun.z / sLen);
+  const mhx = moon.x / mLen;
+  const mhy = moon.y / mLen;
+  const mhz = moon.z / mLen;
+  const denom = _eclAxis.x * mhx + _eclAxis.y * mhy + _eclAxis.z * mhz;
+  if (Math.abs(denom) < 1e-9) return empty;
+
+  // Intersection of shadow axis with plane through Moon ⊥ Earth–Moon
+  const tt = mLen / denom;
+  _eclOffset.set(
+    _eclAxis.x * tt - moon.x,
+    _eclAxis.y * tt - moon.y,
+    _eclAxis.z * tt - moon.z
+  );
+  const offsetKm = _eclOffset.length() * A.KM_PER_AU;
+  const D = mLen * A.KM_PER_AU;
+  const Ds = sLen * A.KM_PER_AU;
+  const fU = (SUN_R_KM - EARTH_R_KM) / Ds;
+  const fP = (SUN_R_KM + EARTH_R_KM) / Ds;
+  const uR = EARTH_R_KM - D * fU;
+  const pR = EARTH_R_KM + D * fP;
+  if (!(pR > 0)) return empty;
+
+  const ox =
+    ((_eclOffset.x * xAxis.x + _eclOffset.y * xAxis.y + _eclOffset.z * xAxis.z) *
+      A.KM_PER_AU) /
+    MOON_R_KM;
+  const oy =
+    ((_eclOffset.x * yAxis.x + _eclOffset.y * yAxis.y + _eclOffset.z * yAxis.z) *
+      A.KM_PER_AU) /
+    MOON_R_KM;
+
+  const umbralObscuration =
+    uR > 0 ? diskOverlapFraction(MOON_R_KM, uR, offsetKm) : 0;
+  const penCover = diskOverlapFraction(MOON_R_KM, pR, offsetKm);
+  // Soft penumbral amount when not yet in umbra
+  const penumbral =
+    penCover > 0
+      ? Math.min(1, Math.max(0, penCover - umbralObscuration))
+      : 0;
+
+  let stage = "none";
+  if (umbralObscuration >= 0.995) stage = "total";
+  else if (umbralObscuration > 0.012) stage = "partial";
+  else if (penCover > 0.04) stage = "penumbral";
+
+  const cat = catalogLunarEclipse(A, when);
+  let kind = cat && Math.abs(when.getTime() - cat.peakMs) < (cat.sd_penum + 20) * 60e3
+    ? cat.kind
+    : null;
+  // Prefer geometry stage; fall back to catalog kind near peak for penumbral-only events
+  if (stage === "none" && kind === "penumbral" && cat) {
+    const dtMin = Math.abs(when.getTime() - cat.peakMs) / 60000;
+    if (dtMin <= cat.sd_penum) stage = "penumbral";
+  }
+  if (stage === "partial" && kind === "total" && umbralObscuration > 0.98) {
+    stage = "total";
+  }
+
+  return {
+    active: stage !== "none",
+    stage,
+    umbralObscuration,
+    penumbral,
+    ox,
+    oy,
+    uR: uR > 0 ? uR / MOON_R_KM : 0,
+    pR: pR / MOON_R_KM,
+    kind: kind || stage,
+    peak: cat ? new Date(cat.peakMs) : null,
+    catalogObscuration: cat ? cat.obscuration : 0,
+  };
+}
 
 function phaseName(phase01) {
   if (phase01 < 0.03 || phase01 > 0.97) return "New Moon";
@@ -139,6 +307,14 @@ function phaseName(phase01) {
   if (phase01 < 0.72) return "Waning Gibbous";
   if (phase01 < 0.78) return "Last Quarter";
   return "Waning Crescent";
+}
+
+function eclipsePhaseName(stage, phase01) {
+  // Short labels — metric cells are narrow (ellipsis otherwise)
+  if (stage === "total") return "Total eclipse";
+  if (stage === "partial") return "Partial eclipse";
+  if (stage === "penumbral") return "Penumbral eclipse";
+  return phaseName(phase01);
 }
 
 function skyRollRad(latDeg, lonDeg, date) {
@@ -265,6 +441,8 @@ export function createMoonGlobe(canvas, options = {}) {
   scene.add(ambient);
 
   let lastFrac = 0.5;
+  let lastEclipseUmbra = 0;
+  let lastEclipsePen = 0;
 
   // Camera orbits `target`; moon is always at `target` (required for 2fs pan).
   const target = new THREE.Vector3(0, 0, 0);
@@ -560,16 +738,26 @@ export function createMoonGlobe(canvas, options = {}) {
     _xAxis.normalize();
     _yAxis.crossVectors(_zAxis, _xAxis).normalize();
 
+    const ecl = computeLunarEclipse(A, when, _xAxis, _yAxis, _zAxis);
+    // Disk still in direct sunlight (phase × not in umbra); light penumbral dip
+    const illuminated = Math.max(
+      0,
+      Math.min(
+        1,
+        frac * (1 - ecl.umbralObscuration) * (1 - 0.1 * ecl.penumbral)
+      )
+    );
+
     const lx = _toSun.dot(_xAxis);
     const ly = _toSun.dot(_yAxis);
     const lz = _toSun.dot(_zAxis);
 
     lastFrac = frac;
+    lastEclipseUmbra = ecl.umbralObscuration;
+    lastEclipsePen = ecl.penumbral;
     key.position.set(lx, ly, lz).multiplyScalar(12).add(target);
     key.target.position.copy(target);
-    key.intensity = LIGHTING.keyBase + frac * LIGHTING.keyFracGain;
     earthshine.position.set(0.04, 0.08, 10).add(target);
-    updateViewLighting();
 
     const lib = A.Libration(time);
     const southern = orientLocked ? frozenSouthern : observerLat < 0;
@@ -588,14 +776,30 @@ export function createMoonGlobe(canvas, options = {}) {
     // Screen roll only — do not double-apply a crude N/S π flip on top of skyRoll
     moonGroup.rotation.set(0, 0, skyRoll);
     moonGroup.position.copy(target);
-    const viewZ = new THREE.Vector3(0, 0, 1);
-    key.position.sub(target).applyAxisAngle(viewZ, skyRoll).add(target);
-    earthshine.position.sub(target).applyAxisAngle(viewZ, skyRoll).add(target);
+    key.position.sub(target).applyAxisAngle(_viewZ, skyRoll).add(target);
+    earthshine.position.sub(target).applyAxisAngle(_viewZ, skyRoll).add(target);
+
+    // Eclipse uses the same MeshStandard + key/earthshine shading as the lunar
+    // phase cycle — no screen-space umbra overlay (that drew a hard shade line).
+    // Coverage only drives key tint/intensity and a soft blood-moon residual.
+    key.color
+      .copy(_keyColor)
+      .lerp(_keyEclipse, Math.min(1, ecl.umbralObscuration * 1.2 + ecl.penumbral * 0.15));
+    updateViewLighting();
 
     lastPhaseInfo = {
       phase01,
       fraction: frac,
-      name: phaseName(phase01),
+      illuminated,
+      name: eclipsePhaseName(ecl.stage, phase01),
+      eclipse: {
+        stage: ecl.stage,
+        umbralObscuration: ecl.umbralObscuration,
+        penumbral: ecl.penumbral,
+        kind: ecl.kind,
+        peak: ecl.peak,
+        catalogObscuration: ecl.catalogObscuration,
+      },
       lat: observerLat,
       lon: observerLon,
       when: new Date(when.getTime()),
@@ -656,14 +860,42 @@ export function createMoonGlobe(canvas, options = {}) {
     const e = LIGHTING.earth;
     const o = LIGHTING.orbit;
     const t = LIGHTING.dualMode ? earthViewAmount() : 0;
-    ambient.intensity = lerp(o.ambient, e.ambient, t);
+    // Same lighting path as normal phase; eclipse only scales/tints that light
+    const eclDim = Math.min(1, lastEclipseUmbra * 0.92 + lastEclipsePen * 0.18);
+    ambient.intensity = lerp(o.ambient, e.ambient, t) * (1 - eclDim * 0.35);
     earthshine.intensity =
       lerp(o.earthshineBase, e.earthshineBase, t) +
-      (1 - frac) * lerp(o.earthshineNewGain, e.earthshineNewGain, t);
-    if (material) {
-      material.emissiveIntensity = lerp(o.emissive, e.emissive, t);
+      (1 - frac) * lerp(o.earthshineNewGain, e.earthshineNewGain, t) +
+      // Copper residual when direct sun is blocked (same soft fill language as earthshine)
+      lastEclipseUmbra * 0.22;
+    if (earthshine.color) {
+      earthshine.color.setRGB(
+        0.62 + lastEclipseUmbra * 0.38,
+        0.7 - lastEclipseUmbra * 0.42,
+        0.83 - lastEclipseUmbra * 0.7
+      );
     }
-    key.intensity = LIGHTING.keyBase + frac * LIGHTING.keyFracGain;
+    if (material) {
+      const baseEm = lerp(o.emissive, e.emissive, t);
+      material.emissiveIntensity = baseEm + lastEclipseUmbra * 0.08;
+      if (material.emissive) {
+        material.emissive.setRGB(
+          1,
+          1 - lastEclipseUmbra * 0.45,
+          1 - lastEclipseUmbra * 0.7
+        );
+      }
+      // Keep albedo warmth mild so MeshStandard terminator stays the shade model
+      if (material.color) {
+        material.color.setRGB(
+          1.04 + lastEclipseUmbra * 0.06,
+          1.02 - lastEclipseUmbra * 0.35,
+          1.0 - lastEclipseUmbra * 0.55
+        );
+      }
+    }
+    key.intensity =
+      (LIGHTING.keyBase + frac * LIGHTING.keyFracGain) * (1 - eclDim * 0.72);
   }
 
   function readHomePadsPx() {
