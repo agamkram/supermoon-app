@@ -2506,6 +2506,12 @@
         : "Slow continuous moon orbit (tap again to stop)";
     }
 
+    function startOrbitDefault() {
+      if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+      globe.setOrbiting(true);
+      setOrbitUI(true);
+    }
+
     orbitBtn.addEventListener("click", (e) => {
       e.preventDefault();
       const next = !globe.isOrbiting();
@@ -2614,6 +2620,7 @@
       onPhase: showPhase,
       onMissionTap: openMissionSheet,
     });
+    startOrbitDefault();
 
     function applyLocation(lat, lon, source) {
       globe.setObserver(lat, lon);
