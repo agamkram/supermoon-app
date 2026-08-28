@@ -1601,7 +1601,7 @@
   <script src="astronomy.js"></script>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
   <script type="module">
-    import { createMoonGlobe } from "./moon.js?v=20";
+    import { createMoonGlobe } from "./moon.js?v=21";
 
     const STORAGE_KEY = "moon-globe-loc-v1";
     const TIDE_STATIONS_KEY = "supermoon-noaa-tide-stations-v6";
@@ -2613,6 +2613,7 @@
         canvas.classList.add("is-ready");
         status.textContent = "";
         status.style.display = "none";
+        startOrbitDefault();
       },
       onQuality() {
         /* quality upgrades stay silent */
@@ -2620,7 +2621,6 @@
       onPhase: showPhase,
       onMissionTap: openMissionSheet,
     });
-    startOrbitDefault();
 
     function applyLocation(lat, lon, source) {
       globe.setObserver(lat, lon);
@@ -2812,8 +2812,10 @@
       applyDefaultLocation();
     }
     goLive();
+    startOrbitDefault();
     requestAnimationFrame(() => {
       goLive();
+      startOrbitDefault();
       requestUserLocation({ force: false });
     });
 

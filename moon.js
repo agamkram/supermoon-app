@@ -1221,8 +1221,20 @@ export function createMoonGlobe(canvas, options = {}) {
     applyCanvasPanTransform();
 
     homeDist = computeHomeDistance(w, h);
-    if (atHome) applyHomeFraming();
-    else setCamDist(homeDist * zoomFrac);
+    if (atHome) {
+      // iOS visualViewport resize fires often — don't wipe yaw while auto-orbiting
+      if (orbiting) {
+        homeLiftY = homeScreenOffsetY();
+        applyCanvasPanTransform();
+        readSpherical();
+        spherical.radius = homeDist;
+        writeCamera();
+        syncMoon();
+        prevCamDist = homeDist;
+      } else {
+        applyHomeFraming();
+      }
+    } else setCamDist(homeDist * zoomFrac);
   }
 
   function resetView() {
