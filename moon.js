@@ -1222,8 +1222,8 @@ export function createMoonGlobe(canvas, options = {}) {
 
     homeDist = computeHomeDistance(w, h);
     if (atHome) {
-      // iOS visualViewport resize fires often — don't wipe yaw while auto-orbiting
       if (orbiting) {
+        // Keep yaw; iOS viewport resize would otherwise snap face-on
         homeLiftY = homeScreenOffsetY();
         applyCanvasPanTransform();
         readSpherical();

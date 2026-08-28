@@ -1601,7 +1601,7 @@
   <script src="astronomy.js"></script>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
   <script type="module">
-    import { createMoonGlobe } from "./moon.js?v=21";
+    import { createMoonGlobe } from "./moon.js?v=22";
 
     const STORAGE_KEY = "moon-globe-loc-v1";
     const TIDE_STATIONS_KEY = "supermoon-noaa-tide-stations-v6";
@@ -2507,12 +2507,8 @@
     }
 
     function startOrbitDefault() {
-      // Same path as tapping Orbit (iOS often has Reduce Motion on — don't skip).
-      if (globe.isOrbiting()) {
-        setOrbitUI(true);
-        return;
-      }
-      orbitBtn.click();
+      if (globe.isOrbiting()) setOrbitUI(true);
+      else orbitBtn.click();
     }
 
     orbitBtn.addEventListener("click", (e) => {
@@ -2616,7 +2612,6 @@
         canvas.classList.add("is-ready");
         status.textContent = "";
         status.style.display = "none";
-        startOrbitDefault();
       },
       onQuality() {
         /* quality upgrades stay silent */
@@ -2815,7 +2810,6 @@
       applyDefaultLocation();
     }
     goLive();
-    startOrbitDefault();
     requestAnimationFrame(() => {
       goLive();
       startOrbitDefault();
